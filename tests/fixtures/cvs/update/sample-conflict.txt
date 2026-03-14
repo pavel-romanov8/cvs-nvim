@@ -1,0 +1,5 @@
+cvs update: Updating .
+U lua/cvs/init.lua
+C lua/cvs/features/update/service.lua
+cvs update: warning: lua/cvs/features/update/service.lua already contains conflict markers
+M local-only.txt
