@@ -25,9 +25,13 @@ COMMANDS                                                        *cvs-commands*
 :CvsUpdate [path]
         Open the scaffolded update workflow.
 
+                                                        *:CvsAdd*
+:CvsAdd [path]
+        Add the current buffer or the provided path to CVS.
+
                                                         *:CvsCommit*
 :CvsCommit [path]
-        Open the scaffolded commit workflow.
+        Open a CVS commit message buffer for the current workspace or path.
 
                                                         *:CvsDiff*
 :CvsDiff [path]

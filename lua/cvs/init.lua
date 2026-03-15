@@ -23,6 +23,7 @@ end
 
 M.status = call("cvs.features.status.service", "open")
 M.update = call("cvs.features.update.service", "run")
+M.add = call("cvs.features.files.service", "add")
 M.commit = call("cvs.features.commit.service", "open")
 M.diff = call("cvs.features.diff.service", "open")
 M.log = call("cvs.features.log.service", "open")

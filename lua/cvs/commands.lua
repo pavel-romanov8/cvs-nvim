@@ -27,6 +27,14 @@ function M.setup()
     desc = "Run or preview a CVS update workflow",
   })
 
+  create("CvsAdd", function(args)
+    require("cvs").add({ path = args.args })
+  end, {
+    nargs = "?",
+    complete = "file",
+    desc = "Add a file or directory to CVS",
+  })
+
   create("CvsCommit", function(args)
     require("cvs").commit({ path = args.args })
   end, {
