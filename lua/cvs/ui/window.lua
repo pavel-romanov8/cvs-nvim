@@ -31,6 +31,8 @@ function M.open(bufnr, opts)
 
   if kind == "tab" then
     vim.cmd("tabnew")
+  elseif kind == "left_vsplit" then
+    vim.cmd("leftabove vsplit")
   elseif kind == "split" then
     vim.cmd("split")
   elseif kind == "vsplit" then
@@ -40,7 +42,13 @@ function M.open(bufnr, opts)
   end
 
   vim.api.nvim_win_set_buf(0, bufnr)
-  return vim.api.nvim_get_current_win()
+  local winid = vim.api.nvim_get_current_win()
+
+  if opts.width and kind ~= "floating" then
+    pcall(vim.api.nvim_win_set_width, winid, opts.width)
+  end
+
+  return winid
 end
 
 return M

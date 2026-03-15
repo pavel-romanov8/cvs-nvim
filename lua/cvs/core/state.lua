@@ -19,6 +19,16 @@ function M.get_buffer(bufnr)
   return M.buffers[bufnr]
 end
 
+function M.find_buffer(predicate)
+  for bufnr, data in pairs(M.buffers) do
+    if predicate(bufnr, data) then
+      return bufnr, data
+    end
+  end
+
+  return nil, nil
+end
+
 function M.detach_buffer(bufnr)
   M.buffers[bufnr] = nil
 end

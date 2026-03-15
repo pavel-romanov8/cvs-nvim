@@ -1,0 +1,6 @@
+Annotations for hello.lua
+***************
+1.1          (mary     27-Mar-96): local M = {}
+1.3          (joe      28-Mar-96 14:32): function M.hello()
+1.3          (joe      28-Mar-96 14:32):   return "hi"
+1.2          (anna     29-Mar-96): end

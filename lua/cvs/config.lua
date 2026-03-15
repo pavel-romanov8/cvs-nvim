@@ -32,7 +32,10 @@ local defaults = {
       kind = "tab",
     },
     annotate = {
-      kind = "tab",
+      kind = "left_vsplit",
+      width = 28,
+      author_width = 12,
+      auto_refresh_on_save = true,
     },
     conflicts = {
       kind = "tab",
