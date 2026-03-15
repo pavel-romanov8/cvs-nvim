@@ -9,6 +9,13 @@ local util = require("cvs.core.util")
 
 local M = {}
 
+local function build_request(target_path)
+  return {
+    cwd = vim.fs.dirname(target_path),
+    path = vim.fs.basename(target_path),
+  }
+end
+
 local function resolve_target_path(opts)
   local path = util.resolve_path(opts.path)
   if not path then
@@ -67,9 +74,10 @@ local function collect(opts)
     return nil, errors.new("cvs_missing", ("CVS executable is not available: %s"):format(caps.bin))
   end
 
-  local command = cmd.annotate(vim.tbl_extend("force", opts, { path = target_path }))
+  local request = build_request(target_path)
+  local command = cmd.annotate(vim.tbl_extend("force", opts, { path = request.path }))
   local result = runner.run(command, {
-    cwd = workspace.root_dir,
+    cwd = request.cwd,
   })
   local parsed = parse.parse(result.stdout)
 
@@ -138,5 +146,7 @@ function M.refresh(arg)
 
   return require("cvs.features.annotate.buffer").update(bufnr, view_state)
 end
+
+M._build_request = build_request
 
 return M
