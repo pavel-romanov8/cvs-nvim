@@ -42,14 +42,40 @@ function M.read_first_line(path)
   return vim.trim(lines[1])
 end
 
+local function resolve_workspace_alias(path)
+  if path == nil or path == "" then
+    return path
+  end
+
+  if not vim.startswith(path, "@") then
+    return path
+  end
+
+  local cwd = uv.cwd()
+  if not cwd then
+    return path
+  end
+
+  return M.path_join(cwd, path:sub(2))
+end
+
+local function resolve_explicit(path)
+  if path == nil or path == "" then
+    return nil
+  end
+
+  return M.normalize(vim.fn.fnamemodify(resolve_workspace_alias(path), ":p"))
+end
+
 function M.resolve_path(path)
-  if path and path ~= "" then
-    return M.normalize(vim.fn.fnamemodify(path, ":p"))
+  local resolved = resolve_explicit(path)
+  if resolved then
+    return resolved
   end
 
   local current = vim.api.nvim_buf_get_name(0)
   if current ~= "" then
-    return M.normalize(vim.fn.fnamemodify(current, ":p"))
+    return M.normalize(vim.fn.fnamemodify(resolve_workspace_alias(current), ":p"))
   end
 
   local cwd = uv.cwd()

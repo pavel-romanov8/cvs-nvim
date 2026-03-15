@@ -1,6 +1,7 @@
 local root = vim.fn.getcwd()
 
 local tests = {
+  "tests/unit/core_util_spec.lua",
   "tests/unit/features/annotate_parse_spec.lua",
   "tests/unit/features/annotate_render_spec.lua",
   "tests/unit/features/annotate_service_spec.lua",

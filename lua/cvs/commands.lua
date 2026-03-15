@@ -2,14 +2,6 @@ local M = {}
 
 local initialized = false
 
-local function resolve_path(raw)
-  if raw == nil or raw == "" then
-    return nil
-  end
-
-  return vim.fn.expand(raw)
-end
-
 local function create(name, callback, opts)
   vim.api.nvim_create_user_command(name, callback, opts)
 end
@@ -20,7 +12,7 @@ function M.setup()
   end
 
   create("CvsStatus", function(args)
-    require("cvs").status({ path = resolve_path(args.args) })
+    require("cvs").status({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -28,7 +20,7 @@ function M.setup()
   })
 
   create("CvsUpdate", function(args)
-    require("cvs").update({ path = resolve_path(args.args) })
+    require("cvs").update({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -36,7 +28,7 @@ function M.setup()
   })
 
   create("CvsCommit", function(args)
-    require("cvs").commit({ path = resolve_path(args.args) })
+    require("cvs").commit({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -44,7 +36,7 @@ function M.setup()
   })
 
   create("CvsDiff", function(args)
-    require("cvs").diff({ path = resolve_path(args.args) })
+    require("cvs").diff({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -52,7 +44,7 @@ function M.setup()
   })
 
   create("CvsLog", function(args)
-    require("cvs").log({ path = resolve_path(args.args) })
+    require("cvs").log({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -60,7 +52,7 @@ function M.setup()
   })
 
   create("CvsAnnotate", function(args)
-    require("cvs").annotate({ path = resolve_path(args.args) })
+    require("cvs").annotate({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
@@ -68,7 +60,7 @@ function M.setup()
   })
 
   create("CvsConflicts", function(args)
-    require("cvs").conflicts({ path = resolve_path(args.args) })
+    require("cvs").conflicts({ path = args.args })
   end, {
     nargs = "?",
     complete = "file",
