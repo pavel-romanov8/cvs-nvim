@@ -21,8 +21,8 @@ COMMANDS                                                        *cvs-commands*
 :CvsStatus [path]
         Open the CVS status view for the current buffer or the provided path.
 
-                                                         *:Cvs*
-:Cvs [path]
+                                                          *:CVS*
+:CVS [path]
         Open the main CVS commit session view for the current workspace or
         the provided path.
 

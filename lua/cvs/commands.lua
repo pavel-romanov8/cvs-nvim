@@ -11,7 +11,7 @@ function M.setup()
     return
   end
 
-  create("Cvs", function(args)
+  create("CVS", function(args)
     require("cvs").session({ path = args.args })
   end, {
     nargs = "?",
