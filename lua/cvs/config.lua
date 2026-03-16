@@ -19,6 +19,9 @@ local defaults = {
     status = {
       kind = "tab",
     },
+    session = {
+      kind = "tab",
+    },
     update = {
       kind = "tab",
     },

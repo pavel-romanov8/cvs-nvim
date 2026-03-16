@@ -26,4 +26,7 @@ return function()
     "cvs -f commit -m Fix it pkg/file.lua pkg/other.lua",
     "commit command includes message and files"
   )
+
+  local remove_cmd = cmd.remove({ path = "pkg/file.lua" })
+  assert_eq(table.concat(remove_cmd, " "), "cvs -f remove -f pkg/file.lua", "remove command includes force flag and path")
 end

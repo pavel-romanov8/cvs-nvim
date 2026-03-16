@@ -22,7 +22,7 @@ local function scope_label(workspace, path)
   return path
 end
 
-local function resolve_target_path(opts)
+local function resolve_target_path(opts, action_name)
   if opts.path and opts.path ~= "" then
     return util.resolve_path(opts.path)
   end
@@ -32,7 +32,7 @@ local function resolve_target_path(opts)
     return util.resolve_path(current)
   end
 
-  return nil, errors.new("path_missing", "CvsAdd requires a file or directory path")
+  return nil, errors.new("path_missing", ("%s requires a file or directory path"):format(action_name or "CvsAdd"))
 end
 
 local function refresh_status(opts)
@@ -44,10 +44,9 @@ local function refresh_status(opts)
   return nil
 end
 
-function M.add(opts)
-  opts = opts or {}
-
-  local target_path, path_err = resolve_target_path(opts)
+local function run_mutation(action)
+  local opts = action.opts or {}
+  local target_path, path_err = resolve_target_path(opts, action.command_name)
   if not target_path then
     util.notify(errors.to_string(path_err), vim.log.levels.ERROR)
     return nil, path_err
@@ -68,10 +67,10 @@ function M.add(opts)
     return nil, err
   end
 
-  local command = cmd.add(opts)
+  local command = action.build_command(opts)
   local label = scope_label(workspace, target_path)
   if queue.is_busy(workspace.root_dir) then
-    util.notify(("Queued CVS add for %s."):format(label))
+    util.notify(("Queued CVS %s for %s."):format(action.operation, label))
   end
 
   queue.enqueue(workspace.root_dir, function(done)
@@ -85,31 +84,59 @@ function M.add(opts)
           events.emit("CvsChanged", {
             root_dir = workspace.root_dir,
             result = result,
-            operation = "add",
+            operation = action.operation,
             path = target_path,
           })
-          util.notify(("Added %s to CVS."):format(label))
+          util.notify((action.success_message):format(label))
         else
-          local message = result.stderr[1] or result.stdout[1] or ("CVS add exited with code %d."):format(result.code)
+          local message = result.stderr[1]
+            or result.stdout[1]
+            or ("CVS %s exited with code %d."):format(action.operation, result.code)
           util.notify(message, vim.log.levels.WARN)
+        end
+
+        if opts.on_complete then
+          opts.on_complete(result, {
+            workspace = workspace,
+            label = label,
+            path = target_path,
+            command = command,
+            operation = action.operation,
+          })
         end
       end)
 
       if not ok then
-        util.notify(("CVS add failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
+        util.notify(("CVS %s failed internally: %s"):format(action.operation, callback_err), vim.log.levels.ERROR)
       end
 
       done()
     end)
   end, function(queue_err)
-    util.notify(("CVS add queue error: %s"):format(queue_err), vim.log.levels.ERROR)
+    util.notify(("CVS %s queue error: %s"):format(action.operation, queue_err), vim.log.levels.ERROR)
   end)
 
   return command
 end
 
+function M.add(opts)
+  return run_mutation({
+    opts = opts,
+    command_name = "CvsAdd",
+    operation = "add",
+    success_message = "Added %s to CVS.",
+    build_command = cmd.add,
+  })
+end
+
 function M.remove(opts)
-  return cmd.remove(opts or {})
+  return run_mutation({
+    opts = opts,
+    command_name = "CvsRemove",
+    operation = "remove",
+    success_message = "Scheduled %s for removal.",
+    build_command = cmd.remove,
+  })
 end
 
 M._resolve_target_path = resolve_target_path

@@ -11,6 +11,14 @@ function M.setup()
     return
   end
 
+  create("Cvs", function(args)
+    require("cvs").session({ path = args.args })
+  end, {
+    nargs = "?",
+    complete = "file",
+    desc = "Open the CVS commit session view",
+  })
+
   create("CvsStatus", function(args)
     require("cvs").status({ path = args.args })
   end, {
@@ -33,6 +41,14 @@ function M.setup()
     nargs = "?",
     complete = "file",
     desc = "Add a file or directory to CVS",
+  })
+
+  create("CvsRemove", function(args)
+    require("cvs").remove({ path = args.args })
+  end, {
+    nargs = "?",
+    complete = "file",
+    desc = "Remove a file or directory from CVS",
   })
 
   create("CvsCommit", function(args)

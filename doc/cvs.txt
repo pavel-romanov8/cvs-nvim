@@ -17,21 +17,31 @@ alongside the implementation.
 ==============================================================================
 COMMANDS                                                        *cvs-commands*
 
-                                                        *:CvsStatus*
+                                                         *:CvsStatus*
 :CvsStatus [path]
         Open the CVS status view for the current buffer or the provided path.
+
+                                                         *:Cvs*
+:Cvs [path]
+        Open the main CVS commit session view for the current workspace or
+        the provided path.
 
                                                         *:CvsUpdate*
 :CvsUpdate [path]
         Open the scaffolded update workflow.
 
-                                                        *:CvsAdd*
+                                                         *:CvsAdd*
 :CvsAdd [path]
         Add the current buffer or the provided path to CVS.
 
-                                                        *:CvsCommit*
+                                                         *:CvsRemove*
+:CvsRemove [path]
+        Schedule the current buffer or the provided path for CVS removal.
+
+                                                         *:CvsCommit*
 :CvsCommit [path]
-        Open a CVS commit message buffer for the current workspace or path.
+        Open a direct CVS commit message buffer for the current workspace or
+        path.
 
                                                         *:CvsDiff*
 :CvsDiff [path]
