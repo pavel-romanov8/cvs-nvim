@@ -8,9 +8,20 @@ local function config_values()
   return require("cvs.config").get().ui.annotate
 end
 
-local function compute_width(cfg)
-  -- author_width + " | " (3 chars) + "YYYY-MM-DD" (10 chars)
-  return cfg.author_width + 13
+local function compute_width(cfg, entries)
+  local date_width = 10
+  if entries then
+    for _, entry in ipairs(entries) do
+      if entry.date then
+        local w = vim.fn.strdisplaywidth(entry.date)
+        if w > date_width then
+          date_width = w
+        end
+      end
+    end
+  end
+  -- author_width + " | " (3 chars) + date_width
+  return cfg.author_width + 3 + date_width
 end
 
 local function source_line_count(view_state)
@@ -244,7 +255,7 @@ function M.open(view_state, opts)
 
   local winid = window.open(bufnr, {
     kind = opts.kind or cfg.kind,
-    width = compute_width(cfg),
+    width = compute_width(cfg, view_state.parsed and view_state.parsed.entries),
   })
 
   local attachment = build_attachment(bufnr, winid, view_state)
