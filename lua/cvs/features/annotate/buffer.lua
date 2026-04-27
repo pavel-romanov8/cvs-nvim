@@ -8,6 +8,22 @@ local function config_values()
   return require("cvs.config").get().ui.annotate
 end
 
+local function compute_width(cfg, entries)
+  local date_width = 10
+  if entries then
+    for _, entry in ipairs(entries) do
+      if entry.date then
+        local w = vim.fn.strdisplaywidth(entry.date)
+        if w > date_width then
+          date_width = w
+        end
+      end
+    end
+  end
+  -- author_width + " | " (3 chars) + date_width
+  return cfg.author_width + 3 + date_width
+end
+
 local function source_line_count(view_state)
   if view_state.source_bufnr and vim.api.nvim_buf_is_valid(view_state.source_bufnr) then
     return vim.api.nvim_buf_line_count(view_state.source_bufnr)
@@ -87,7 +103,6 @@ local function set_window_options(winid, view_state)
   wo.signcolumn = "no"
   wo.foldcolumn = "0"
   wo.winfixwidth = true
-  wo.winbar = view_state.stale and "CVS Annotate [stale]" or "CVS Annotate"
 end
 
 local function sync_view(source_win, annotate_win)
@@ -240,7 +255,7 @@ function M.open(view_state, opts)
 
   local winid = window.open(bufnr, {
     kind = opts.kind or cfg.kind,
-    width = opts.width or cfg.width,
+    width = compute_width(cfg, view_state.parsed and view_state.parsed.entries),
   })
 
   local attachment = build_attachment(bufnr, winid, view_state)

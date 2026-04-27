@@ -27,7 +27,6 @@ local function reset_editor()
     ui = {
       annotate = {
         kind = "left_vsplit",
-        width = 20,
         author_width = 12,
         auto_refresh_on_save = true,
       },
@@ -106,7 +105,6 @@ local function test_rerenders_when_source_line_count_changes()
   local source_win = vim.api.nvim_get_current_win()
   local annotate_bufnr = annotate_buffer.open(view_state(source_bufnr, 2), {
     kind = "left_vsplit",
-    width = 20,
   })
 
   assert_eq(vim.api.nvim_buf_line_count(annotate_bufnr), 2, "initial annotate line count")
@@ -129,7 +127,6 @@ local function test_tracks_the_active_source_split()
   local primary_win = vim.api.nvim_get_current_win()
   local _, annotate_win = annotate_buffer.open(view_state(source_bufnr, 4), {
     kind = "left_vsplit",
-    width = 20,
   })
 
   vim.api.nvim_set_current_win(primary_win)
@@ -149,8 +146,41 @@ local function test_tracks_the_active_source_split()
   assert_eq(state.get_buffer(vim.api.nvim_win_get_buf(annotate_win)).source_win, secondary_win, "state tracks the active source split")
 end
 
+local function test_window_width_fits_long_date()
+  local source_bufnr = reset_editor()
+  vim.api.nvim_buf_set_lines(source_bufnr, 0, -1, false, { "one" })
+
+  local long_date = "28-Mar-96 14:32"
+  local long_date_entries = {
+    { author = "joe", date = long_date, revision = "1.3" },
+  }
+
+  target_id = target_id + 1
+  local vs = {
+    parsed = { entries = long_date_entries, messages = {} },
+    source_bufnr = source_bufnr,
+    source_win = vim.api.nvim_get_current_win(),
+    target_path = ("test://source-%d"):format(target_id),
+    workspace = { root_dir = vim.fn.getcwd() },
+    stale = false,
+    opts = {},
+  }
+
+  local cfg = require("cvs.config").get().ui.annotate
+  local _, annotate_win = annotate_buffer.open(vs, { kind = "left_vsplit" })
+
+  local expected_width = cfg.author_width + 3 + vim.fn.strdisplaywidth(long_date)
+  local actual_width = vim.api.nvim_win_get_width(annotate_win)
+
+  assert_true(
+    actual_width >= expected_width,
+    ("window width %d should be >= %d for date %q"):format(actual_width, expected_width, long_date)
+  )
+end
+
 return function()
   test_tab_keeps_annotate_visible()
   test_rerenders_when_source_line_count_changes()
   test_tracks_the_active_source_split()
+  test_window_width_fits_long_date()
 end
