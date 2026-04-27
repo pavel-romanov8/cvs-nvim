@@ -27,7 +27,6 @@ local function reset_editor()
     ui = {
       annotate = {
         kind = "left_vsplit",
-        width = 20,
         author_width = 12,
         auto_refresh_on_save = true,
       },
@@ -106,7 +105,6 @@ local function test_rerenders_when_source_line_count_changes()
   local source_win = vim.api.nvim_get_current_win()
   local annotate_bufnr = annotate_buffer.open(view_state(source_bufnr, 2), {
     kind = "left_vsplit",
-    width = 20,
   })
 
   assert_eq(vim.api.nvim_buf_line_count(annotate_bufnr), 2, "initial annotate line count")
@@ -129,7 +127,6 @@ local function test_tracks_the_active_source_split()
   local primary_win = vim.api.nvim_get_current_win()
   local _, annotate_win = annotate_buffer.open(view_state(source_bufnr, 4), {
     kind = "left_vsplit",
-    width = 20,
   })
 
   vim.api.nvim_set_current_win(primary_win)
