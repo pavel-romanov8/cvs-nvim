@@ -50,7 +50,25 @@ function M.parse_lines(lines)
 end
 
 function M.load(path)
-  return M.parse_lines(util.read_file(path) or {})
+  local loaded = M.parse_lines(util.read_file(path) or {})
+
+  for _, line in ipairs(util.read_file(path .. ".Log") or {}) do
+    local action, raw = line:match("^(.) (.*)$")
+    local entry = M.parse_line(raw)
+
+    if action == "A" and entry then
+      loaded[#loaded + 1] = entry
+    elseif action == "R" and entry then
+      for index, current in ipairs(loaded) do
+        if current.raw == entry.raw then
+          table.remove(loaded, index)
+          break
+        end
+      end
+    end
+  end
+
+  return loaded
 end
 
 return M

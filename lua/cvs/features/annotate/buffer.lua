@@ -1,8 +1,11 @@
 local state = require("cvs.core.state")
 local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
+local mapping = require("cvs.features.annotate.mapping")
 
 local M = {}
+
+local CONTENT_REFRESH_DELAY_MS = 80
 
 local function config_values()
   return require("cvs.config").get().ui.annotate
@@ -63,8 +66,17 @@ end
 local function set_content(bufnr, view_state)
   local cfg = config_values()
   local line_count = source_line_count(view_state)
+  local entries = view_state.parsed.entries
 
-  ui_buffer.set_lines(bufnr, require("cvs.features.annotate.render").lines(view_state.parsed.entries, {
+  if view_state.source_bufnr
+    and vim.api.nvim_buf_is_valid(view_state.source_bufnr)
+    and (#entries > 0 or view_state.result)
+  then
+    local source_lines = vim.api.nvim_buf_get_lines(view_state.source_bufnr, 0, -1, false)
+    entries, view_state.stale = mapping.entries(entries, source_lines)
+  end
+
+  ui_buffer.set_lines(bufnr, require("cvs.features.annotate.render").lines(entries, {
     line_count = line_count,
     author_width = cfg.author_width,
   }))
@@ -132,30 +144,49 @@ local function setup_autocmds(bufnr, attachment)
 
   local group = vim.api.nvim_create_augroup(("CvsAnnotate%d"):format(bufnr), { clear = true })
 
-  local function refresh_state()
+  local function refresh_view()
     local current = state.get_buffer(bufnr)
     if not current then
       return
     end
 
     current.source_win = resolve_source_win(current.source_bufnr, vim.api.nvim_get_current_win(), current.source_win)
-    current.stale = vim.api.nvim_buf_is_valid(current.source_bufnr) and vim.bo[current.source_bufnr].modified or false
-    local line_count = source_line_count(current)
-    if current.line_count ~= line_count then
-      current.line_count = set_content(bufnr, current)
-    else
-      current.line_count = line_count
-    end
-
     state.attach_buffer(bufnr, current)
     set_window_options(current.annotate_win)
     sync_view(current.source_win, current.annotate_win)
   end
 
-  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinScrolled", "BufModifiedSet", "TextChanged", "TextChangedI" }, {
+  local refresh_generation = 0
+  local function queue_content_refresh()
+    refresh_generation = refresh_generation + 1
+    local generation = refresh_generation
+
+    vim.defer_fn(function()
+      if generation ~= refresh_generation or not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+
+      local current = state.get_buffer(bufnr)
+      if not current then
+        return
+      end
+
+      current.line_count = set_content(bufnr, current)
+      state.attach_buffer(bufnr, current)
+      refresh_view()
+    end, CONTENT_REFRESH_DELAY_MS)
+  end
+
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "WinScrolled" }, {
     group = group,
     buffer = attachment.source_bufnr,
-    callback = refresh_state,
+    callback = refresh_view,
+  })
+
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
+    group = group,
+    buffer = attachment.source_bufnr,
+    callback = queue_content_refresh,
   })
 
   vim.api.nvim_create_autocmd("BufWritePost", {
@@ -165,7 +196,7 @@ local function setup_autocmds(bufnr, attachment)
       if config_values().auto_refresh_on_save ~= false then
         require("cvs.features.annotate.service").refresh(attachment.source_bufnr)
       else
-        refresh_state()
+        queue_content_refresh()
       end
     end,
   })

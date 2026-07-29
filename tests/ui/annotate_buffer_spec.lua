@@ -52,14 +52,15 @@ local function reset_editor()
   return bufnr
 end
 
-local function entries(count)
+local function entries(lines)
   local result = {}
 
-  for index = 1, count do
+  for index, text in ipairs(lines) do
     result[index] = {
       author = ("user%d"):format(index),
       date = ("2024-01-%02d"):format(index),
       revision = ("1.%d"):format(index),
+      text = text,
     }
   end
 
@@ -68,10 +69,11 @@ end
 
 local function view_state(source_bufnr, count)
   target_id = target_id + 1
+  local source_lines = vim.api.nvim_buf_get_lines(source_bufnr, 0, count, false)
 
   return {
     parsed = {
-      entries = entries(count),
+      entries = entries(source_lines),
       messages = {},
     },
     source_bufnr = source_bufnr,
@@ -118,8 +120,44 @@ local function test_rerenders_when_source_line_count_changes()
     modeline = false,
   })
 
+  assert_true(vim.wait(500, function()
+    return vim.api.nvim_buf_line_count(annotate_bufnr) == 3
+  end), "annotate refresh completes")
   assert_eq(vim.api.nvim_buf_line_count(annotate_bufnr), 3, "annotate grows with the source buffer")
-  assert_eq(vim.api.nvim_buf_get_lines(annotate_bufnr, 2, 3, false)[1], "", "new unsaved line renders as blank metadata")
+  assert_eq(
+    vim.api.nvim_buf_get_lines(annotate_bufnr, 2, 3, false)[1],
+    "[local]      | Not committed",
+    "new unsaved line renders as local"
+  )
+end
+
+local function test_remaps_annotations_around_local_changes()
+  local source_bufnr = reset_editor()
+  vim.api.nvim_buf_set_lines(source_bufnr, 0, -1, false, { "one", "two", "three" })
+
+  local source_win = vim.api.nvim_get_current_win()
+  local annotate_bufnr = annotate_buffer.open(view_state(source_bufnr, 3), {
+    kind = "left_vsplit",
+    width = 20,
+  })
+
+  vim.api.nvim_set_current_win(source_win)
+  vim.api.nvim_buf_set_lines(source_bufnr, 1, 2, false, { "local", "two" })
+  vim.bo[source_bufnr].modified = false
+  vim.api.nvim_exec_autocmds("TextChanged", {
+    buffer = source_bufnr,
+    modeline = false,
+  })
+
+  assert_true(vim.wait(500, function()
+    return vim.api.nvim_buf_get_lines(annotate_bufnr, 1, 2, false)[1] == "[local]      | Not committed"
+  end), "local mapping refresh completes")
+
+  local lines = vim.api.nvim_buf_get_lines(annotate_bufnr, 0, -1, false)
+  assert_eq(lines[2], "[local]      | Not committed", "inserted line is local")
+  assert_eq(lines[3], "user2        | 2024-01-02", "shifted unchanged line keeps attribution")
+  assert_eq(lines[4], "user3        | 2024-01-03", "later unchanged line keeps attribution")
+  assert_eq(state.get_buffer(annotate_bufnr).stale, true, "saved uncommitted content remains local")
 end
 
 local function test_tracks_the_active_source_split()
@@ -154,5 +192,6 @@ end
 return function()
   test_tab_keeps_annotate_visible()
   test_rerenders_when_source_line_count_changes()
+  test_remaps_annotations_around_local_changes()
   test_tracks_the_active_source_split()
 end

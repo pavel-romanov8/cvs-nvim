@@ -30,10 +30,10 @@ end
 function M.line(entry, opts)
   opts = opts or {}
 
-  local author = pad(entry.author or "-", opts.author_width or 12)
-  local date = entry.date or "-"
+  local author = entry.local_change and "[local]" or entry.author or "-"
+  local date = entry.local_change and "Not committed" or entry.date or "-"
 
-  return ("%s | %s"):format(author, date)
+  return ("%s | %s"):format(pad(author, opts.author_width or 12), date)
 end
 
 function M.lines(entries, opts)

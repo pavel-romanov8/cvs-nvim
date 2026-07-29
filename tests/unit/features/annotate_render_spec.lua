@@ -18,4 +18,10 @@ return function()
   assert_eq(lines[1], "mary     | 27-Mar-96", "padded author line")
   assert_eq(lines[2], "verylon~ | 28-Mar-96 14:32", "truncated author line")
   assert_eq(lines[3], "", "blank padded line")
+
+  assert_eq(
+    render.line({ local_change = true }, { author_width = 8 }),
+    "[local]  | Not committed",
+    "local change line"
+  )
 end

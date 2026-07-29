@@ -60,6 +60,11 @@ end
 function M.annotate(opts)
   local cmd = base()
   table.insert(cmd, "annotate")
+
+  if opts and opts.revision then
+    vim.list_extend(cmd, { "-r", opts.revision })
+  end
+
   return add_files(cmd, opts or {})
 end
 

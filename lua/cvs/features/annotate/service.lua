@@ -1,6 +1,7 @@
 local capabilities = require("cvs.cvs.capabilities")
 local cmd = require("cvs.cvs.cmd")
 local context = require("cvs.cvs.context")
+local entries = require("cvs.cvs.entries")
 local errors = require("cvs.core.errors")
 local parse = require("cvs.features.annotate.parse")
 local runner = require("cvs.cvs.runner")
@@ -9,10 +10,47 @@ local util = require("cvs.core.util")
 
 local M = {}
 
+local function valid_revision(revision)
+  if not revision or revision == "0" then
+    return false
+  end
+
+  local parts = vim.split(revision, ".", { plain = true, trimempty = false })
+  if #parts < 2 then
+    return false
+  end
+
+  for _, part in ipairs(parts) do
+    if not part:match("^%d+$") then
+      return false
+    end
+  end
+
+  return true
+end
+
+local function working_revision(target_path)
+  local target_name = vim.fs.basename(target_path)
+  local entries_path = util.path_join(vim.fs.dirname(target_path), "CVS", "Entries")
+
+  for _, entry in ipairs(entries.load(entries_path)) do
+    local revision = entry.revision
+    if entry.kind == "file"
+      and entry.name == target_name
+      and valid_revision(revision)
+    then
+      return revision
+    end
+  end
+
+  return nil
+end
+
 local function build_request(target_path)
   return {
     cwd = vim.fs.dirname(target_path),
     path = vim.fs.basename(target_path),
+    revision = working_revision(target_path),
   }
 end
 
@@ -75,7 +113,10 @@ local function prepare(opts)
   end
 
   local request = build_request(target_path)
-  local command = cmd.annotate(vim.tbl_extend("force", opts, { path = request.path }))
+  local command = cmd.annotate(vim.tbl_extend("force", opts, {
+    path = request.path,
+    revision = request.revision,
+  }))
   local source_bufnr = detect_source_bufnr(target_path, opts)
   local source_win = opts.source_win
   if not source_win and source_bufnr and vim.api.nvim_get_current_buf() == source_bufnr then
@@ -196,5 +237,7 @@ function M.refresh(arg)
 end
 
 M._build_request = build_request
+M._working_revision = working_revision
+M._valid_revision = valid_revision
 
 return M
