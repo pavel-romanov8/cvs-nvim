@@ -73,7 +73,7 @@ local function set_content(bufnr, view_state)
   return line_count
 end
 
-local function set_window_options(winid, view_state)
+local function set_window_options(winid)
   if not winid or not vim.api.nvim_win_is_valid(winid) then
     return
   end
@@ -87,7 +87,7 @@ local function set_window_options(winid, view_state)
   wo.signcolumn = "no"
   wo.foldcolumn = "0"
   wo.winfixwidth = true
-  wo.winbar = view_state.stale and "CVS Annotate [stale]" or "CVS Annotate"
+  wo.winbar = ""
 end
 
 local function sync_view(source_win, annotate_win)
@@ -148,7 +148,7 @@ local function setup_autocmds(bufnr, attachment)
     end
 
     state.attach_buffer(bufnr, current)
-    set_window_options(current.annotate_win, current)
+    set_window_options(current.annotate_win)
     sync_view(current.source_win, current.annotate_win)
   end
 
@@ -245,7 +245,7 @@ function M.open(view_state, opts)
 
   local attachment = build_attachment(bufnr, winid, view_state)
   state.attach_buffer(bufnr, attachment)
-  set_window_options(winid, view_state)
+  set_window_options(winid)
   setup_autocmds(bufnr, attachment)
   sync_view(attachment.source_win, winid)
 
@@ -266,7 +266,7 @@ function M.update(bufnr, view_state)
   local old = state.get_buffer(bufnr) or {}
   local attachment = build_attachment(bufnr, old.annotate_win, view_state, old)
   state.attach_buffer(bufnr, attachment)
-  set_window_options(attachment.annotate_win, view_state)
+  set_window_options(attachment.annotate_win)
   sync_view(attachment.source_win, attachment.annotate_win)
 
   return bufnr, attachment.annotate_win

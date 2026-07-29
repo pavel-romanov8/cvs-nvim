@@ -16,7 +16,7 @@ function M.setup()
   end, {
     nargs = "?",
     complete = "file",
-    desc = "Open the CVS commit session view",
+    desc = "Open the main CVS workspace view",
   })
 
   create("CvsStatus", function(args)

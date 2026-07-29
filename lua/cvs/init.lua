@@ -22,7 +22,7 @@ function M.setup(opts)
 end
 
 M.status = call("cvs.features.status.service", "open")
-M.session = call("cvs.features.session.service", "open")
+M.session = call("cvs.features.status.service", "open")
 M.update = call("cvs.features.update.service", "run")
 M.add = call("cvs.features.files.service", "add")
 M.remove = call("cvs.features.files.service", "remove")

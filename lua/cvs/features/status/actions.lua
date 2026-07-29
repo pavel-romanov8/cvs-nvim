@@ -6,8 +6,20 @@ function M.close(bufnr)
   end
 end
 
-function M.refresh(path)
-  require("cvs.features.status.service").open({ path = path })
+function M.refresh(bufnr)
+  return require("cvs.features.status.service").refresh(bufnr)
+end
+
+function M.open_current(bufnr)
+  return require("cvs.features.status.service").open_current(bufnr)
+end
+
+function M.add_current(bufnr)
+  return require("cvs.features.status.service").add_current(bufnr)
+end
+
+function M.remove_current(bufnr)
+  return require("cvs.features.status.service").remove_current(bufnr)
 end
 
 return M

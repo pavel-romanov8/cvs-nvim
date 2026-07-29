@@ -132,6 +132,8 @@ local function test_tracks_the_active_source_split()
     width = 20,
   })
 
+  assert_eq(vim.wo[annotate_win].winbar, "", "annotate window has no header")
+
   vim.api.nvim_set_current_win(primary_win)
   vim.cmd("split")
 

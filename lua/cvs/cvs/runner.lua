@@ -41,8 +41,11 @@ function M.run(cmd, opts, callback)
     cwd = opts.cwd,
     text = true,
     stdin = opts.stdin,
-    timeout = opts.timeout or config.get().cvs.timeout_ms,
   }
+
+  if opts.timeout ~= false then
+    job_opts.timeout = opts.timeout or config.get().cvs.timeout_ms
+  end
 
   if callback then
     return vim.system(cmd, job_opts, function(result)

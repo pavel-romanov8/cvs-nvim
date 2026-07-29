@@ -23,8 +23,8 @@ COMMANDS                                                        *cvs-commands*
 
                                                           *:CVS*
 :CVS [path]
-        Open the main CVS commit session view for the current workspace or
-        the provided path.
+        Open the main CVS workspace view for the current workspace or the
+        provided path.
 
                                                         *:CvsUpdate*
 :CvsUpdate [path]
