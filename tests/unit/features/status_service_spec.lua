@@ -37,9 +37,10 @@ return function()
 
   local view_state = service._build_view_state(snapshot, {}, {})
   assert_eq(view_state.scope_label, "workspace", "default scope label")
-  assert_eq(view_state.total_count, 6, "file count")
+  assert_eq(view_state.total_count, 5, "visible file count")
   assert_eq(view_state.counts.modified, 1, "modified count")
   assert_eq(view_state.counts.unknown, 1, "unknown count")
+  assert_eq(view_state.counts.updated, nil, "updated count is hidden")
   assert_eq(view_state.messages[1], "status warning", "messages are preserved")
 
   local modified = find_section(view_state, "modified")
@@ -49,5 +50,5 @@ return function()
   assert_eq(#modified.items, 1, "modified section item count")
   assert_eq(modified.items[1].path, "lua/cvs/init.lua", "modified item path")
   assert_eq(#unknown.items, 1, "unknown section item count")
-  assert_eq(#updated.items, 1, "updated section item count")
+  assert_eq(updated, nil, "updated section is hidden")
 end

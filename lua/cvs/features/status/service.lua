@@ -58,22 +58,25 @@ local function build_sections(snapshot)
   local total_count = 0
 
   for _, file in ipairs(snapshot.files or {}) do
-    total_count = total_count + 1
-    counts[file.status] = (counts[file.status] or 0) + 1
+    -- U reports an incoming repository change, not a working-copy change.
+    if file.status ~= types.status.updated then
+      total_count = total_count + 1
+      counts[file.status] = (counts[file.status] or 0) + 1
 
-    if not grouped[file.status] then
-      grouped[file.status] = {
-        kind = file.status,
-        title = section_titles[file.status] or file.status,
-        items = {},
+      if not grouped[file.status] then
+        grouped[file.status] = {
+          kind = file.status,
+          title = section_titles[file.status] or file.status,
+          items = {},
+        }
+      end
+
+      grouped[file.status].items[#grouped[file.status].items + 1] = {
+        code = file.code,
+        path = file.path,
+        status = file.status,
       }
     end
-
-    grouped[file.status].items[#grouped[file.status].items + 1] = {
-      code = file.code,
-      path = file.path,
-      status = file.status,
-    }
   end
 
   local sections = {}
