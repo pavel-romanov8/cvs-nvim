@@ -7,9 +7,15 @@ local function create(name, callback, opts)
 end
 
 local function command_opts(args)
-  return {
+  local opts = {
     path = args.args ~= "" and args.args or nil,
   }
+
+  if args.bang then
+    opts.force = true
+  end
+
+  return opts
 end
 
 function M.setup()
@@ -17,17 +23,10 @@ function M.setup()
     return
   end
 
-  create("CVS", function(args)
-    require("cvs").session(command_opts(args))
-  end, {
-    nargs = "?",
-    complete = "file",
-    desc = "Open the main CVS workspace view",
-  })
-
   create("Cvs", function(args)
     require("cvs").status(command_opts(args))
   end, {
+    bang = true,
     nargs = "?",
     complete = "file",
     desc = "Open the CVS status view",
@@ -36,6 +35,7 @@ function M.setup()
   create("CvsStatus", function(args)
     require("cvs").status(command_opts(args))
   end, {
+    bang = true,
     nargs = "?",
     complete = "file",
     desc = "Open the CVS status view",

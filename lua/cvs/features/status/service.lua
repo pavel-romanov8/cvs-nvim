@@ -8,8 +8,10 @@ local runner = require("cvs.cvs.runner")
 local state = require("cvs.core.state")
 local types = require("cvs.core.types")
 local util = require("cvs.core.util")
+local uv = vim.uv or vim.loop
 
 local M = {}
+local initialized = false
 
 local status_order = {
   [types.status.modified] = 1,
@@ -96,18 +98,104 @@ end
 local function build_view_state(snapshot, opts, previous)
   previous = previous or {}
   local sections, counts, total_count = build_sections(snapshot)
+  local stored_opts = vim.tbl_extend("force", {}, opts or {})
+  stored_opts.force = nil
 
   return {
     workspace = snapshot.workspace,
     scope_label = scope_label(snapshot.workspace, opts or {}),
-    opts = vim.tbl_extend("force", {}, opts or {}),
+    opts = stored_opts,
     status_snapshot = snapshot,
     generated_at = snapshot.generated_at,
+    cached = snapshot.cached == true,
     sections = sections,
     counts = counts,
     total_count = total_count,
     messages = vim.deepcopy(previous.messages or snapshot.messages or {}),
   }
+end
+
+local function cache_key(opts)
+  local files = opts.files or {}
+  if not opts.path and #files == 0 then
+    return "workspace"
+  end
+
+  local parts = {}
+  local function append(kind, value)
+    value = tostring(value)
+    parts[#parts + 1] = ("%s:%d:%s"):format(kind, #value, value)
+  end
+
+  if opts.path then
+    append("path", opts.path)
+  end
+  for _, file in ipairs(files) do
+    append("file", file)
+  end
+
+  return table.concat(parts, "|")
+end
+
+local function cached_snapshot(workspace, opts)
+  local cache_config = require("cvs.config").get().status.cache
+  if opts.force or cache_config.enabled == false then
+    return nil
+  end
+
+  local entry = state.get_status_cache(workspace.root_dir, cache_key(opts))
+  if not entry then
+    return nil
+  end
+
+  local age_ms = (uv.hrtime() - entry.cached_at) / 1000000
+  if cache_config.ttl_ms and age_ms >= cache_config.ttl_ms then
+    return nil
+  end
+
+  return vim.tbl_extend("force", {}, entry.snapshot, {
+    workspace = workspace,
+    cached = true,
+  })
+end
+
+local function store_cached_snapshot(snapshot, opts)
+  if not snapshot.result or snapshot.result.code ~= 0 then
+    return
+  end
+
+  local cache_config = require("cvs.config").get().status.cache
+  if cache_config.enabled == false then
+    return
+  end
+
+  state.set_status_cache(snapshot.workspace.root_dir, cache_key(opts), {
+    snapshot = snapshot,
+    cached_at = uv.hrtime(),
+  })
+end
+
+function M.setup()
+  if initialized then
+    return
+  end
+
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = vim.api.nvim_create_augroup("CvsStatusCache", { clear = true }),
+    callback = function(args)
+      local path = vim.api.nvim_buf_get_name(args.buf)
+      if path == "" then
+        return
+      end
+
+      local workspace = context.detect(uv.fs_realpath(path) or path)
+      if workspace then
+        state.invalidate_status_cache(workspace.root_dir)
+      end
+    end,
+  })
+
+  initialized = true
 end
 
 local function get_attachment(bufnr)
@@ -140,11 +228,27 @@ function M.collect(opts)
     return nil, err
   end
 
+  local cache_config = require("cvs.config").get().status.cache
+  if opts.force or cache_config.enabled == false then
+    state.invalidate_status_cache(workspace.root_dir)
+  end
+
+  local cached = cached_snapshot(workspace, opts)
+  if cached then
+    state.set_snapshot(workspace.root_dir, cached)
+    events.emit("CvsStatusRefreshed", {
+      root_dir = workspace.root_dir,
+      cached = true,
+    })
+    return cached
+  end
+
   local snapshot = {
     workspace = workspace,
     files = {},
     messages = {},
     generated_at = os.date("%Y-%m-%d %H:%M:%S"),
+    cached = false,
   }
 
   local caps = capabilities.detect()
@@ -161,12 +265,30 @@ function M.collect(opts)
   end
 
   state.set_snapshot(workspace.root_dir, snapshot)
-  events.emit("CvsStatusRefreshed", { root_dir = workspace.root_dir })
+  store_cached_snapshot(snapshot, opts)
+  events.emit("CvsStatusRefreshed", {
+    root_dir = workspace.root_dir,
+    cached = false,
+  })
 
   return snapshot
 end
 
 function M.open(opts)
+  opts = opts or {}
+
+  if not opts.path then
+    local bufnr = vim.api.nvim_get_current_buf()
+    local attachment = get_attachment(bufnr)
+    if attachment then
+      if opts.force then
+        return M.refresh(bufnr)
+      end
+
+      return bufnr, vim.api.nvim_get_current_win()
+    end
+  end
+
   local snapshot, err = M.collect(opts)
   if not snapshot then
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
@@ -184,7 +306,10 @@ function M.refresh(bufnr, extra)
     return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
   end
 
-  local snapshot, err = M.collect(view_state.opts)
+  local collect_opts = vim.tbl_extend("force", {}, view_state.opts, {
+    force = extra.force ~= false,
+  })
+  local snapshot, err = M.collect(collect_opts)
   if not snapshot then
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
     return nil, err
@@ -247,6 +372,7 @@ function M.add_current(bufnr)
 
       M.refresh(bufnr, {
         messages = { message },
+        force = false,
       })
     end,
   })
@@ -293,11 +419,13 @@ function M.remove_current(bufnr)
 
       M.refresh(bufnr, {
         messages = { message },
+        force = false,
       })
     end,
   })
 end
 
 M._build_view_state = build_view_state
+M._cache_key = cache_key
 
 return M

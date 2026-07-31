@@ -14,10 +14,12 @@ local tests = {
   "tests/unit/features/files_service_spec.lua",
   "tests/unit/features/status_render_spec.lua",
   "tests/unit/features/status_service_spec.lua",
+  "tests/unit/features/status_cache_spec.lua",
   "tests/unit/features/session_buffer_spec.lua",
   "tests/unit/features/session_service_spec.lua",
   "tests/ui/annotate_buffer_spec.lua",
   "tests/ui/diff_view_spec.lua",
+  "tests/ui/status_buffer_spec.lua",
   "tests/unit/features/update_parse_spec.lua",
   "tests/unit/features/update_render_spec.lua",
 }

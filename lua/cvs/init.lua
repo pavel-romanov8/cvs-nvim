@@ -17,6 +17,7 @@ function M.setup(opts)
 
   require("cvs.commands").setup()
   require("cvs.ui.highlights").setup()
+  require("cvs.features.status.service").setup()
 
   initialized = true
 end

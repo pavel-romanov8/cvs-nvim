@@ -45,7 +45,8 @@ local function merge_selected(base, overrides)
 end
 
 local function refresh_status(opts)
-  local ok, result = pcall(require("cvs.features.status.service").collect, opts)
+  local refresh_opts = vim.tbl_extend("force", {}, opts or {}, { force = true })
+  local ok, result = pcall(require("cvs.features.status.service").collect, refresh_opts)
   if ok then
     return result
   end

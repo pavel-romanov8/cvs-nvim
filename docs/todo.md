@@ -18,13 +18,9 @@
 
 ### Existing, But Not Good Enough Yet
 
-- `:CVS`
-  - Main session / main workflow command exists.
-  - Needs a rethink in architecture, UX, and overall feel.
-
 - `:CvsAdd`
   - Add command exists.
-  - Needs better flow and better integration with the main `:CVS` workflow.
+  - Needs better flow and better integration with the main `:Cvs` workflow.
 
 - `:CvsUpdate`
   - Update command exists.
@@ -55,7 +51,7 @@
 
 ### First Priority
 
-1. Rework `:CVS` into the main workflow we actually want to use.
+1. Continue refining `:Cvs` into the main workflow we actually want to use.
 2. Improve `:CvsAdd` so it feels natural inside the main workflow.
 3. Improve `:CvsUpdate` so it supports the main workflow cleanly.
 
@@ -73,4 +69,4 @@
 
 - Right now, the plugin has three workflows that feel finished: status, annotate, and file diff.
 - Everything else should be treated as either in-progress, needing redesign, or still scaffolded.
-- The next real focus should be the main `:CVS` experience, with `add` and `update` supporting that workflow.
+- The next real focus should be the main `:Cvs` experience, with `add` and `update` supporting that workflow.

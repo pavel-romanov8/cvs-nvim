@@ -1,8 +1,8 @@
 # CVS Command Architecture
 
-## Main `:CVS` Direction
+## Main `:Cvs` Direction
 
-The first step in the new architecture is to make `:CVS` open a Fugitive-like
+The first step in the new architecture is to make `:Cvs` open a Fugitive-like
 workspace buffer instead of dropping straight into a commit message flow.
 
 That buffer should be the user's starting point for the CVS workflow:
@@ -27,7 +27,7 @@ while still staying honest to CVS semantics.
 
 For the first slice of the redesign:
 
-- `:CVS` and `:CvsStatus` can share the same workspace status buffer
+- `:Cvs` and `:CvsStatus` can share the same workspace status buffer
 - `:CvsCommit` remains the dedicated commit-message workflow
 - the main buffer is read-only and acts as the entry point into the rest of the
   CVS workflow
@@ -47,5 +47,5 @@ Reasons:
 After this first step is stable, the next pieces can build on top of it:
 
 - wire commit flow back into the main buffer in a cleaner way
-- improve update flow so incoming states feel connected to `:CVS`
+- improve update flow so incoming states feel connected to `:Cvs`
 - add better per-file actions and deeper drill-down views

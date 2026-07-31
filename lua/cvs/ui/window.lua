@@ -24,6 +24,7 @@ function M.open(bufnr, opts)
   opts = opts or {}
 
   local kind = opts.kind or config.get().ui.default_kind
+  local source_height = vim.api.nvim_win_get_height(0)
 
   if kind == "floating" then
     return open_floating(bufnr, opts)
@@ -46,6 +47,11 @@ function M.open(bufnr, opts)
 
   if opts.width and kind ~= "floating" then
     pcall(vim.api.nvim_win_set_width, winid, opts.width)
+  end
+
+  if opts.height and kind == "split" then
+    local height = opts.height < 1 and math.floor(source_height * opts.height) or opts.height
+    pcall(vim.api.nvim_win_set_height, winid, math.max(1, height))
   end
 
   return winid

@@ -5,6 +5,7 @@ local errors = require("cvs.core.errors")
 local events = require("cvs.core.events")
 local queue = require("cvs.core.queue")
 local runner = require("cvs.cvs.runner")
+local state = require("cvs.core.state")
 local util = require("cvs.core.util")
 
 local M = {}
@@ -33,15 +34,6 @@ local function resolve_target_path(opts, action_name)
   end
 
   return nil, errors.new("path_missing", ("%s requires a file or directory path"):format(action_name or "CvsAdd"))
-end
-
-local function refresh_status(opts)
-  local ok, result = pcall(require("cvs.features.status.service").collect, opts)
-  if ok then
-    return result
-  end
-
-  return nil
 end
 
 local function run_mutation(action)
@@ -78,7 +70,7 @@ local function run_mutation(action)
       cwd = workspace.root_dir,
     }, function(result)
       local ok, callback_err = pcall(function()
-        refresh_status(opts)
+        state.invalidate_status_cache(workspace.root_dir)
 
         if result.code == 0 then
           events.emit("CvsChanged", {

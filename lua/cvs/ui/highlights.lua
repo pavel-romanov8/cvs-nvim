@@ -2,15 +2,40 @@ local M = {}
 
 local initialized = false
 
+local links = {
+  CvsHeader = "Title",
+  CvsSection = "PreProc",
+  CvsLabel = "Identifier",
+  CvsMuted = "Comment",
+  CvsPath = "Directory",
+  CvsStatusModified = "Changed",
+  CvsStatusAdded = "Added",
+  CvsStatusRemoved = "Removed",
+  CvsStatusUnknown = "DiagnosticWarn",
+  CvsStatusConflict = "DiagnosticError",
+  CvsStatusUpdated = "Changed",
+  CvsStatusPatched = "Changed",
+}
+
+local function apply()
+  for name, target in pairs(links) do
+    local current = vim.api.nvim_get_hl(0, { name = name, link = true })
+    if next(current) == nil then
+      vim.api.nvim_set_hl(0, name, { link = target })
+    end
+  end
+end
+
 function M.setup()
   if initialized then
     return
   end
 
-  vim.api.nvim_set_hl(0, "CvsHeader", { link = "Title" })
-  vim.api.nvim_set_hl(0, "CvsLabel", { link = "Identifier" })
-  vim.api.nvim_set_hl(0, "CvsMuted", { link = "Comment" })
-  vim.api.nvim_set_hl(0, "CvsPath", { link = "Directory" })
+  apply()
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = vim.api.nvim_create_augroup("CvsHighlights", { clear = true }),
+    callback = apply,
+  })
 
   initialized = true
 end

@@ -4,11 +4,24 @@ local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
 
 local M = {}
+local namespace = vim.api.nvim_create_namespace("cvs-status")
 
-local function render(view_state)
-  local lines, row_map = require("cvs.features.status.render").lines(view_state)
+local function render(bufnr, view_state)
+  local lines, row_map, highlights = require("cvs.features.status.render").lines(view_state)
   view_state.row_map = row_map
-  return lines
+  ui_buffer.set_lines(bufnr, lines)
+
+  vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+  for _, item in ipairs(highlights) do
+    vim.api.nvim_buf_add_highlight(
+      bufnr,
+      namespace,
+      item.group,
+      item.row - 1,
+      item.start_col,
+      item.end_col
+    )
+  end
 end
 
 local function close_buffer(bufnr)
@@ -47,7 +60,7 @@ function M.open(view_state, opts)
     filetype = "cvs-status",
   })
 
-  ui_buffer.set_lines(bufnr, render(view_state))
+  render(bufnr, view_state)
   ui_buffer.lock(bufnr)
   ui_buffer.set_keymaps(bufnr, {
     {
@@ -98,8 +111,10 @@ function M.open(view_state, opts)
     view_state = view_state,
   })
 
+  local status_config = require("cvs.config").get().ui.status
   local winid = window.open(bufnr, {
-    kind = opts.kind or require("cvs.config").get().ui.status.kind,
+    kind = opts.kind or status_config.kind,
+    height = opts.height or status_config.height,
   })
 
   vim.api.nvim_win_set_cursor(winid, { first_item_row(view_state.row_map), 0 })
@@ -131,7 +146,7 @@ function M.update(bufnr, view_state)
   attachment.view_state = view_state
   state.attach_buffer(bufnr, attachment)
 
-  ui_buffer.set_lines(bufnr, render(view_state))
+  render(bufnr, view_state)
   ui_buffer.lock(bufnr)
 
   if cursor and winids[1] and vim.api.nvim_win_is_valid(winids[1]) then

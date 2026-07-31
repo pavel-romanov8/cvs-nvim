@@ -9,6 +9,12 @@ local defaults = {
   notifications = {
     enabled = true,
   },
+  status = {
+    cache = {
+      enabled = true,
+      ttl_ms = 300000,
+    },
+  },
   ui = {
     default_kind = "tab",
     floating = {
@@ -17,7 +23,8 @@ local defaults = {
       height = 0.8,
     },
     status = {
-      kind = "tab",
+      kind = "split",
+      height = 0.5,
     },
     session = {
       kind = "tab",

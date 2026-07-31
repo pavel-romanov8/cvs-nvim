@@ -5,6 +5,7 @@ CONTENTS                                                        *cvs-contents*
 
 1. Introduction ................................................ |cvs-intro|
 2. Commands .................................................... |cvs-commands|
+3. Configuration ............................................... |cvs-config|
 
 ==============================================================================
 INTRODUCTION                                                      *cvs-intro*
@@ -18,17 +19,16 @@ commands while keeping CVS semantics.
 COMMANDS                                                        *cvs-commands*
 
                                                           *:Cvs*
-:Cvs [path]
-        Open the CVS status view. Move to a file and press <CR> to open it.
+:Cvs[!] [path]
+        Open the themed CVS status view in a horizontal split. Move to a file
+        and press <CR> to open it. Reuses a recent cached snapshot when
+        possible. Cached snapshots expire after five minutes and are discarded
+        when a working-copy buffer is written. Use [!] or press R in the status
+        view to query CVS again immediately.
 
                                                          *:CvsStatus*
-:CvsStatus [path]
+:CvsStatus[!] [path]
         Alias for the CVS status view used by |:Cvs|.
-
-                                                          *:CVS*
-:CVS [path]
-        Open the main CVS workspace view for the current workspace or the
-        provided path.
 
                                                         *:CvsUpdate*
 :CvsUpdate [path]
@@ -69,6 +69,25 @@ COMMANDS                                                        *cvs-commands*
                                                         *:CvsConflicts*
 :CvsConflicts [path]
         Open the scaffolded conflict workflow.
+
+==============================================================================
+CONFIGURATION                                                      *cvs-config*
+
+Status snapshots are cached for five minutes by default. The cache can be
+configured through setup():
+>
+    require("cvs").setup({
+      status = {
+        cache = {
+          enabled = true,
+          ttl_ms = 300000,
+        },
+      },
+    })
+<
+Set enabled to false to always query CVS. A ttl_ms value of 0 also prevents
+cache reuse. Regardless of these settings, the [!] form of |:Cvs| and R in the
+status view force an immediate refresh.
 
 ==============================================================================
 vim:tw=78:ts=8:noet:ft=help:norl:
