@@ -24,6 +24,7 @@ local function complete(result, cmd, cwd, started_at)
     signal = result.signal,
     stdout = split_output(result.stdout),
     stderr = split_output(result.stderr),
+    stdout_ends_with_newline = type(result.stdout) == "string" and vim.endswith(result.stdout, "\n"),
     cwd = cwd,
     duration_ms = math.floor((uv.hrtime() - started_at) / 1000000),
   }

@@ -32,4 +32,11 @@ return function()
 
   local annotate_cmd = cmd.annotate({ path = "pkg/file.lua", revision = "1.7" })
   assert_eq(table.concat(annotate_cmd, " "), "cvs -f annotate -r 1.7 pkg/file.lua", "annotate pins the revision")
+
+  local base_cmd = cmd.base({ path = "file.lua", revision = "1.7" })
+  assert_eq(
+    table.concat(base_cmd, " "),
+    "cvs -f -Q update -p -r 1.7 file.lua",
+    "base command prints the checked-out revision"
+  )
 end

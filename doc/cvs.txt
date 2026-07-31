@@ -11,15 +11,19 @@ INTRODUCTION                                                      *cvs-intro*
 
 cvs.nvim is a Neovim-native CVS workflow plugin.
 
-This help file currently documents the scaffolded command surface and will grow
-alongside the implementation.
+The main status and file-diff workflows follow the corresponding Fugitive
+commands while keeping CVS semantics.
 
 ==============================================================================
 COMMANDS                                                        *cvs-commands*
 
+                                                          *:Cvs*
+:Cvs [path]
+        Open the CVS status view. Move to a file and press <CR> to open it.
+
                                                          *:CvsStatus*
 :CvsStatus [path]
-        Open the CVS status view for the current buffer or the provided path.
+        Alias for the CVS status view used by |:Cvs|.
 
                                                           *:CVS*
 :CVS [path]
@@ -43,9 +47,16 @@ COMMANDS                                                        *cvs-commands*
         Open a direct CVS commit message buffer for the current workspace or
         path.
 
-                                                        *:CvsDiff*
+                                                         *:CvsDiff*
 :CvsDiff [path]
-        Open the scaffolded diff workflow.
+        Diff the current or provided working file against its checked-out CVS
+        revision in a vertical split.
+
+                                                        *:Cdiffsplit*
+:Cdiffsplit
+        Diff the current working file against its checked-out CVS revision in
+        a vertical split. The working buffer remains editable, including any
+        unsaved changes; the CVS base buffer is read-only.
 
                                                         *:CvsLog*
 :CvsLog [path]

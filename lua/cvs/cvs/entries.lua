@@ -2,6 +2,25 @@ local util = require("cvs.core.util")
 
 local M = {}
 
+function M.valid_revision(revision)
+  if not revision or revision == "0" then
+    return false
+  end
+
+  local parts = vim.split(revision, ".", { plain = true, trimempty = false })
+  if #parts < 2 then
+    return false
+  end
+
+  for _, part in ipairs(parts) do
+    if not part:match("^%d+$") then
+      return false
+    end
+  end
+
+  return true
+end
+
 function M.parse_line(line)
   if line == nil or line == "" then
     return nil
@@ -69,6 +88,22 @@ function M.load(path)
   end
 
   return loaded
+end
+
+function M.working_revision(target_path)
+  local target_name = vim.fs.basename(target_path)
+  local entries_path = util.path_join(vim.fs.dirname(target_path), "CVS", "Entries")
+
+  for _, entry in ipairs(M.load(entries_path)) do
+    if entry.kind == "file"
+      and entry.name == target_name
+      and M.valid_revision(entry.revision)
+    then
+      return entry.revision
+    end
+  end
+
+  return nil
 end
 
 return M

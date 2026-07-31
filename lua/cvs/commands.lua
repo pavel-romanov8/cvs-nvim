@@ -6,21 +6,35 @@ local function create(name, callback, opts)
   vim.api.nvim_create_user_command(name, callback, opts)
 end
 
+local function command_opts(args)
+  return {
+    path = args.args ~= "" and args.args or nil,
+  }
+end
+
 function M.setup()
   if initialized then
     return
   end
 
   create("CVS", function(args)
-    require("cvs").session({ path = args.args })
+    require("cvs").session(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
     desc = "Open the main CVS workspace view",
   })
 
+  create("Cvs", function(args)
+    require("cvs").status(command_opts(args))
+  end, {
+    nargs = "?",
+    complete = "file",
+    desc = "Open the CVS status view",
+  })
+
   create("CvsStatus", function(args)
-    require("cvs").status({ path = args.args })
+    require("cvs").status(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -28,7 +42,7 @@ function M.setup()
   })
 
   create("CvsUpdate", function(args)
-    require("cvs").update({ path = args.args })
+    require("cvs").update(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -36,7 +50,7 @@ function M.setup()
   })
 
   create("CvsAdd", function(args)
-    require("cvs").add({ path = args.args })
+    require("cvs").add(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -44,7 +58,7 @@ function M.setup()
   })
 
   create("CvsRemove", function(args)
-    require("cvs").remove({ path = args.args })
+    require("cvs").remove(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -52,7 +66,7 @@ function M.setup()
   })
 
   create("CvsCommit", function(args)
-    require("cvs").commit({ path = args.args })
+    require("cvs").commit(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -60,15 +74,24 @@ function M.setup()
   })
 
   create("CvsDiff", function(args)
-    require("cvs").diff({ path = args.args })
+    require("cvs").diff(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
-    desc = "Open the CVS diff workflow",
+    desc = "Diff a working file against its CVS base revision",
+  })
+
+  create("Cdiffsplit", function()
+    require("cvs").diff({
+      source_bufnr = vim.api.nvim_get_current_buf(),
+      source_win = vim.api.nvim_get_current_win(),
+    })
+  end, {
+    desc = "Diff the current file against its CVS base revision",
   })
 
   create("CvsLog", function(args)
-    require("cvs").log({ path = args.args })
+    require("cvs").log(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -76,7 +99,7 @@ function M.setup()
   })
 
   create("CvsAnnotate", function(args)
-    require("cvs").annotate({ path = args.args })
+    require("cvs").annotate(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",
@@ -84,7 +107,7 @@ function M.setup()
   })
 
   create("CvsConflicts", function(args)
-    require("cvs").conflicts({ path = args.args })
+    require("cvs").conflicts(command_opts(args))
   end, {
     nargs = "?",
     complete = "file",

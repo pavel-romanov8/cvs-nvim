@@ -51,6 +51,19 @@ function M.diff(opts)
   return add_files(cmd, opts or {})
 end
 
+function M.base(opts)
+  opts = opts or {}
+
+  local cmd = base()
+  vim.list_extend(cmd, { "-Q", "update", "-p" })
+
+  if opts.revision then
+    vim.list_extend(cmd, { "-r", opts.revision })
+  end
+
+  return add_files(cmd, opts)
+end
+
 function M.log(opts)
   local cmd = base()
   table.insert(cmd, "log")

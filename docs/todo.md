@@ -4,8 +4,12 @@
 
 ### Finished
 
-- `:CvsStatus`
+- `:Cvs` / `:CvsStatus`
   - Current status view for a CVS workspace.
+  - Considered finished for now.
+
+- `:Cdiffsplit` / `:CvsDiff`
+  - Vertical diff against the checked-out CVS revision.
   - Considered finished for now.
 
 - `:CvsAnnotate`
@@ -36,9 +40,6 @@
 
 ### Partial Or Still Scaffolded
 
-- `:CvsDiff`
-  - Command exists, but the real diff workflow is not done.
-
 - `:CvsLog`
   - Command exists, but the real history/log workflow is not done.
 
@@ -63,7 +64,6 @@
 1. Revisit `:CvsAnnotate` for polish after the main workflow is in place.
 2. Revisit `:CvsRemove` and `:CvsCommit` after the main workflow is stable.
 3. Finish the partial / scaffolded features:
-   - `:CvsDiff`
    - `:CvsLog`
    - `:CvsConflicts`
    - picker integration
@@ -71,6 +71,6 @@
 
 ## Product Direction Notes
 
-- Right now, the plugin has two commands that feel truly finished: `:CvsStatus` and `:CvsAnnotate`.
+- Right now, the plugin has three workflows that feel finished: status, annotate, and file diff.
 - Everything else should be treated as either in-progress, needing redesign, or still scaffolded.
 - The next real focus should be the main `:CVS` experience, with `add` and `update` supporting that workflow.
