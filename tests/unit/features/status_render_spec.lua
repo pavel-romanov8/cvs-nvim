@@ -46,6 +46,14 @@ return function()
     messages = {
       "example warning",
     },
+    inline_diff = {
+      path = "lua/cvs/init.lua",
+      lines = {
+        "@@ -1 +1 @@",
+        "-local old = true",
+        "+local new = true",
+      },
+    },
   })
 
   local text = table.concat(lines, "\n")
@@ -56,7 +64,11 @@ return function()
   assert_match(text, "M: 1, A: 1, R: 1, ?: 1", "summary counts")
   assert_match(text, "Modified (1)", "modified section")
   assert_match(text, "M  lua/cvs/init.lua", "modified file line")
-  assert_match(text, "Messages", "messages section")
+  assert_match(text, "   @@ -1 +1 @@", "inline diff hunk")
+  assert_match(text, "   -local old = true", "inline diff deletion")
+  assert_match(text, "   +local new = true", "inline diff addition")
+  assert_true(not text:find("Messages", 1, true), "messages section is hidden")
+  assert_true(not text:find("example warning", 1, true), "status messages are hidden")
   assert_match(text, "<CR> opens the current file", "help line")
 
   local groups = {}
@@ -67,4 +79,7 @@ return function()
   assert_true(groups.CvsSection, "section highlight")
   assert_true(groups.CvsStatusModified, "modified file highlight")
   assert_true(groups.CvsStatusAdded, "added file highlight")
+  assert_true(groups.DiffChange, "inline diff hunk highlight")
+  assert_true(groups.DiffDelete, "inline diff deletion highlight")
+  assert_true(groups.DiffAdd, "inline diff addition highlight")
 end

@@ -66,6 +66,28 @@ local function summary_line(counts)
   return ("State Counts: %s"):format(table.concat(parts, ", "))
 end
 
+local function append_inline_diff(lines, row_map, highlights, item, inline_diff)
+  if not inline_diff or inline_diff.path ~= item.path then
+    return
+  end
+
+  for _, diff_line in ipairs(inline_diff.lines or {}) do
+    local row = #lines + 1
+    lines[row] = "   " .. diff_line
+    row_map[row] = item
+
+    if vim.startswith(diff_line, "@@") then
+      highlight(highlights, row, "DiffChange", 3, -1)
+    elseif vim.startswith(diff_line, "+") and not vim.startswith(diff_line, "+++") then
+      highlight(highlights, row, "DiffAdd", 3, -1)
+    elseif vim.startswith(diff_line, "-") and not vim.startswith(diff_line, "---") then
+      highlight(highlights, row, "DiffDelete", 3, -1)
+    else
+      highlight(highlights, row, "CvsMuted", 3, -1)
+    end
+  end
+end
+
 function M.lines(view_state)
   local lines = { "CVS" }
   local row_map = {}
@@ -103,22 +125,15 @@ function M.lines(view_state)
         lines[row] = ("%s  %s"):format(item.code, item.path)
         row_map[row] = item
         highlight(highlights, row, status_highlights[item.status] or "Type", 0, #item.code + 1)
+        append_inline_diff(lines, row_map, highlights, item, view_state.inline_diff)
       end
-    end
-  end
-
-  if view_state.messages and #view_state.messages > 0 then
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "Messages"
-    highlight(highlights, #lines, "CvsSection")
-    for _, message in ipairs(view_state.messages) do
-      lines[#lines + 1] = message
-      highlight(highlights, #lines, "CvsMuted")
     end
   end
 
   lines[#lines + 1] = ""
   lines[#lines + 1] = "<CR> opens the current file"
+  highlight(highlights, #lines, "CvsMuted")
+  lines[#lines + 1] = "= toggles the inline diff"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "a adds or restores the current file"
   highlight(highlights, #lines, "CvsMuted")

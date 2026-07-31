@@ -386,6 +386,76 @@ function M.open_current(bufnr)
   return target
 end
 
+function M.toggle_inline_diff(bufnr)
+  local attachment, view_state = get_attachment(bufnr)
+  if not attachment then
+    return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
+  end
+
+  local item = require("cvs.features.status.buffer").get_current_item(bufnr)
+  if not item then
+    return nil
+  end
+
+  if view_state.inline_diff and view_state.inline_diff.path == item.path then
+    view_state.inline_diff = nil
+    update_view(bufnr, view_state)
+    return true
+  end
+
+  if item.status ~= types.status.modified then
+    util.notify("Inline diff is currently available for modified files only.", vim.log.levels.WARN)
+    return nil
+  end
+
+  local target = resolve_target_path(view_state.workspace, item.path)
+  if vim.fn.filereadable(target) ~= 1 then
+    util.notify(("Could not read %s for inline diff."):format(item.path), vim.log.levels.WARN)
+    return nil
+  end
+
+  view_state.inline_diff = {
+    path = item.path,
+    lines = { "Loading diff..." },
+    loading = true,
+  }
+  update_view(bufnr, view_state)
+
+  return runner.run(cmd.diff({ path = item.path }), {
+    cwd = view_state.workspace.root_dir,
+  }, function(result)
+    if not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+
+    local current_attachment, current_state = get_attachment(bufnr)
+    local inline_diff = current_state and current_state.inline_diff
+    if not current_attachment or not inline_diff or inline_diff.path ~= item.path or not inline_diff.loading then
+      return
+    end
+
+    if result.code > 1 then
+      current_state.inline_diff = nil
+      update_view(bufnr, current_state)
+      local message = result.stderr[1] or result.stdout[1] or ("CVS diff exited with code %d."):format(result.code)
+      util.notify(message, vim.log.levels.ERROR)
+      return
+    end
+
+    if #result.stdout == 0 then
+      current_state.inline_diff = nil
+      update_view(bufnr, current_state)
+      return
+    end
+
+    current_state.inline_diff = {
+      path = item.path,
+      lines = result.stdout,
+    }
+    update_view(bufnr, current_state)
+  end)
+end
+
 function M.add_current(bufnr)
   local attachment, view_state = get_attachment(bufnr)
   if not attachment then

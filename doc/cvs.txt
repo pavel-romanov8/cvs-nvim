@@ -21,10 +21,11 @@ COMMANDS                                                        *cvs-commands*
                                                           *:Cvs*
 :Cvs[!] [path]
         Open the themed CVS status view in a horizontal split. Move to a file
-        and press <CR> to open it. Reuses a recent cached snapshot when
-        possible. Cached snapshots expire after five minutes and are discarded
-        when a working-copy buffer is written. Use [!] or press R in the status
-        view to query CVS again immediately.
+        and press <CR> to open it. Press = on a modified file to toggle its
+        inline unified diff. Reuses a recent cached snapshot when possible.
+        Cached snapshots expire after five minutes and are discarded when a
+        working-copy buffer is written. Use [!] or press R in the status view
+        to query CVS again immediately.
 
                                                          *:CvsStatus*
 :CvsStatus[!] [path]

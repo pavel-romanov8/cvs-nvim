@@ -2,6 +2,7 @@ local config = require("cvs.config")
 local service = require("cvs.features.status.service")
 local state = require("cvs.core.state")
 local status_buffer = require("cvs.features.status.buffer")
+local runner = require("cvs.cvs.runner")
 
 local function assert_eq(actual, expected, message)
   if actual ~= expected then
@@ -69,6 +70,39 @@ return function()
   assert_eq(#vim.api.nvim_tabpage_list_wins(0), 2, "status opens in a split")
   assert_eq(vim.api.nvim_win_get_height(winid), math.floor(source_height / 2), "status split uses half the source height")
   assert_eq(vim.bo[bufnr].filetype, "cvs-status", "status buffer has its filetype")
+
+  local original_run = runner.run
+  local diff_command
+  local diff_cwd
+  runner.run = function(command, opts, callback)
+    diff_command = command
+    diff_cwd = opts.cwd
+    callback({
+      code = 1,
+      stdout = {
+        "--- changed.lua",
+        "+++ changed.lua",
+        "@@ -1 +1 @@",
+        "-old",
+        "+changed",
+      },
+      stderr = {},
+    })
+    return { mocked = true }
+  end
+
+  service.toggle_inline_diff(bufnr)
+  runner.run = original_run
+
+  assert_eq(table.concat(diff_command, " "), "cvs diff -u changed.lua", "inline diff runs CVS diff")
+  assert_eq(diff_cwd, temp_dir, "inline diff runs from the workspace root")
+  local status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+  assert_true(status_text:find("   @@ -1 +1 @@", 1, true) ~= nil, "inline diff renders its hunk")
+  assert_true(status_text:find("   +changed", 1, true) ~= nil, "inline diff renders added lines")
+
+  service.toggle_inline_diff(bufnr)
+  status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+  assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
 
   local existing_bufnr, existing_win = service.open({})
   assert_eq(existing_bufnr, bufnr, ":Cvs reuses the current status buffer")

@@ -22,4 +22,8 @@ function M.remove_current(bufnr)
   return require("cvs.features.status.service").remove_current(bufnr)
 end
 
+function M.toggle_inline_diff(bufnr)
+  return require("cvs.features.status.service").toggle_inline_diff(bufnr)
+end
+
 return M

@@ -90,6 +90,14 @@ function M.open(view_state, opts)
     },
     {
       mode = "n",
+      lhs = "=",
+      rhs = function()
+        actions.toggle_inline_diff(bufnr)
+      end,
+      desc = "Toggle inline CVS diff",
+    },
+    {
+      mode = "n",
       lhs = "a",
       rhs = function()
         actions.add_current(bufnr)
