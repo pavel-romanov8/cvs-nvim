@@ -54,6 +54,7 @@ end
 
 function M.open(view_state, opts)
   opts = opts or {}
+  local origin_win = vim.api.nvim_get_current_win()
 
   local bufnr = ui_buffer.create({
     name = ("cvs://status/%s"):format(view_state.workspace.root_dir),
@@ -108,6 +109,7 @@ function M.open(view_state, opts)
   state.attach_buffer(bufnr, {
     kind = "status",
     root_dir = view_state.workspace.root_dir,
+    origin_win = origin_win,
     view_state = view_state,
   })
 

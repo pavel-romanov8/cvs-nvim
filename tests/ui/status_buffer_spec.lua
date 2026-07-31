@@ -23,7 +23,13 @@ return function()
   config.setup()
   require("cvs.ui.highlights").setup()
 
-  local source_bufnr = vim.api.nvim_create_buf(true, true)
+  local temp_dir = vim.fn.tempname()
+  vim.fn.mkdir(temp_dir, "p")
+  vim.fn.writefile({ "changed" }, temp_dir .. "/changed.lua")
+  vim.fn.writefile({ "new" }, temp_dir .. "/new.lua")
+
+  local source_bufnr = vim.api.nvim_create_buf(true, false)
+  vim.bo[source_bufnr].swapfile = false
   vim.api.nvim_win_set_buf(0, source_bufnr)
   local source_win = vim.api.nvim_get_current_win()
   local source_height = vim.api.nvim_win_get_height(source_win)
@@ -31,7 +37,7 @@ return function()
   local view_state = {
     opts = {},
     workspace = {
-      root_dir = "/tmp/example",
+      root_dir = temp_dir,
     },
     scope_label = "workspace",
     generated_at = "2026-07-31 12:00:00",
@@ -99,9 +105,41 @@ return function()
   assert_true(groups.CvsStatusAdded, "added files are highlighted")
 
   local added = vim.api.nvim_get_hl(0, { name = "CvsStatusAdded", link = true })
-  assert_eq(added.link, "Added", "added files inherit the active theme")
+  assert_eq(added.link, "Typedef", "added files use Fugitive-style modifier highlighting")
   local added_style = vim.api.nvim_get_hl(0, { name = "CvsStatusAdded", link = false })
   assert_true(next(added_style) ~= nil, "added file highlighting resolves to a visible style")
+
+  local modified = vim.api.nvim_get_hl(0, { name = "CvsStatusModified", link = true })
+  assert_eq(modified.link, "Structure", "modified files use Fugitive-style modifier highlighting")
+
+  for _, extmark in ipairs(extmarks) do
+    local details = extmark[4]
+    if details.hl_group == "CvsStatusModified" then
+      assert_eq(extmark[3], 0, "modified highlighting starts at the status prefix")
+      assert_eq(details.end_col, 2, "only the modified status prefix is highlighted")
+    end
+  end
+
+  vim.api.nvim_set_current_win(winid)
+  service.open_current(bufnr)
+  assert_eq(vim.api.nvim_get_current_win(), source_win, "Enter opens the file in the original window")
+  assert_eq(
+    vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)),
+    vim.uv.fs_realpath(temp_dir .. "/changed.lua"),
+    "Enter opens the selected file"
+  )
+  assert_eq(vim.api.nvim_win_get_buf(winid), bufnr, "Enter keeps the status split open")
+
+  if vim.fn.exists("+winfixbuf") == 1 then
+    vim.wo[source_win].winfixbuf = true
+    vim.api.nvim_set_current_win(winid)
+    service.open_current(bufnr)
+    local replacement_win = vim.api.nvim_get_current_win()
+    assert_true(replacement_win ~= source_win, "Enter avoids a fixed-buffer origin window")
+    assert_eq(vim.api.nvim_win_get_buf(winid), bufnr, "fallback keeps the status split open")
+    vim.api.nvim_win_close(replacement_win, true)
+    vim.wo[source_win].winfixbuf = false
+  end
 
   local refreshed = vim.deepcopy(view_state)
   refreshed.counts = { removed = 1 }
@@ -127,7 +165,8 @@ return function()
   vim.api.nvim_set_hl(0, "CvsStatusAdded", {})
   vim.api.nvim_exec_autocmds("ColorScheme", { modeline = false })
   added = vim.api.nvim_get_hl(0, { name = "CvsStatusAdded", link = true })
-  assert_eq(added.link, "Added", "colorscheme changes restore status links")
+  assert_eq(added.link, "Typedef", "colorscheme changes restore status links")
 
   vim.api.nvim_win_close(winid, true)
+  vim.fn.delete(temp_dir, "rf")
 end

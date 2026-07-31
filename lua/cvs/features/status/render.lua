@@ -102,7 +102,7 @@ function M.lines(view_state)
         local row = #lines + 1
         lines[row] = ("%s  %s"):format(item.code, item.path)
         row_map[row] = item
-        highlight(highlights, row, status_highlights[item.status] or "CvsPath")
+        highlight(highlights, row, status_highlights[item.status] or "Type", 0, #item.code + 1)
       end
     end
   end

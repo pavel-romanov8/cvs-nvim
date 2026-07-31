@@ -8,13 +8,13 @@ local links = {
   CvsLabel = "Identifier",
   CvsMuted = "Comment",
   CvsPath = "Directory",
-  CvsStatusModified = "Changed",
-  CvsStatusAdded = "Added",
-  CvsStatusRemoved = "Removed",
-  CvsStatusUnknown = "DiagnosticWarn",
-  CvsStatusConflict = "DiagnosticError",
-  CvsStatusUpdated = "Changed",
-  CvsStatusPatched = "Changed",
+  CvsStatusModified = "Structure",
+  CvsStatusAdded = "Typedef",
+  CvsStatusRemoved = "Typedef",
+  CvsStatusUnknown = "StorageClass",
+  CvsStatusConflict = "Structure",
+  CvsStatusUpdated = "Structure",
+  CvsStatusPatched = "Structure",
 }
 
 local function apply()

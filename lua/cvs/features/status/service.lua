@@ -215,6 +215,47 @@ local function resolve_target_path(workspace, path)
   return util.path_join(workspace.root_dir, path)
 end
 
+local function usable_target_window(winid, status_bufnr)
+  if not winid or not vim.api.nvim_win_is_valid(winid) then
+    return false
+  end
+
+  if vim.api.nvim_win_get_tabpage(winid) ~= vim.api.nvim_get_current_tabpage() then
+    return false
+  end
+
+  local bufnr = vim.api.nvim_win_get_buf(winid)
+  if bufnr == status_bufnr or vim.bo[bufnr].buftype ~= "" then
+    return false
+  end
+
+  if vim.fn.exists("+winfixbuf") == 1 and vim.wo[winid].winfixbuf then
+    return false
+  end
+
+  return vim.api.nvim_win_get_config(winid).relative == ""
+end
+
+local function target_window(attachment, status_bufnr)
+  if usable_target_window(attachment.origin_win, status_bufnr) then
+    return attachment.origin_win
+  end
+
+  local alternate = vim.fn.win_getid(vim.fn.winnr("#"))
+  if usable_target_window(alternate, status_bufnr) then
+    return alternate
+  end
+
+  for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if usable_target_window(winid, status_bufnr) then
+      return winid
+    end
+  end
+
+  vim.cmd("aboveleft new")
+  return vim.api.nvim_get_current_win()
+end
+
 local function update_view(bufnr, next_state)
   require("cvs.features.status.buffer").update(bufnr, next_state)
   return next_state
@@ -337,6 +378,7 @@ function M.open_current(bufnr)
     return nil
   end
 
+  vim.api.nvim_set_current_win(target_window(attachment, bufnr))
   vim.cmd("edit " .. vim.fn.fnameescape(target))
   return target
 end
