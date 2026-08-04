@@ -52,6 +52,13 @@ local function render_lines(view_state)
   lines[#lines + 1] = comment(("Scope: %s"):format(view_state.scope_label))
   lines[#lines + 1] = comment(("Status: %s"):format(view_state.phase))
 
+  if view_state.files and #view_state.files > 0 then
+    lines[#lines + 1] = comment(("Selected Files (%d):"):format(#view_state.files))
+    for _, file in ipairs(view_state.files) do
+      lines[#lines + 1] = comment("  " .. file)
+    end
+  end
+
   if view_state.started_at then
     lines[#lines + 1] = comment(("Started At: %s"):format(view_state.started_at))
   end
@@ -72,6 +79,24 @@ local function render_lines(view_state)
   end
 
   return lines
+end
+
+function M.close(bufnr)
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    if vim.api.nvim_win_is_valid(winid) then
+      local tabpage = vim.api.nvim_win_get_tabpage(winid)
+      if #vim.api.nvim_tabpage_list_wins(tabpage) > 1 then
+        vim.api.nvim_win_close(winid, true)
+      elseif #vim.api.nvim_list_tabpages() > 1 then
+        vim.api.nvim_set_current_win(winid)
+        vim.cmd("tabclose!")
+      end
+    end
+  end
+
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+  end
 end
 
 function M.get_message(bufnr)
@@ -106,9 +131,7 @@ function M.open(view_state, opts)
       mode = "n",
       lhs = "q",
       rhs = function()
-        if vim.api.nvim_buf_is_valid(bufnr) then
-          vim.api.nvim_buf_delete(bufnr, { force = true })
-        end
+        M.close(bufnr)
       end,
       desc = "Close CVS commit",
     },
@@ -134,6 +157,13 @@ function M.open(view_state, opts)
 
   vim.api.nvim_win_set_cursor(winid, { 1, 0 })
 
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    buffer = bufnr,
+    callback = function()
+      state.detach_buffer(bufnr)
+    end,
+  })
+
   return bufnr, winid
 end
 
@@ -152,5 +182,6 @@ function M.update(bufnr, view_state)
 end
 
 M._extract_message_lines = extract_message_lines
+M._render_lines = render_lines
 
 return M

@@ -82,9 +82,15 @@ function M.annotate(opts)
 end
 
 function M.add(opts)
+  opts = opts or {}
   local cmd = base()
   table.insert(cmd, "add")
-  return add_files(cmd, opts or {})
+
+  if opts.binary then
+    table.insert(cmd, "-kb")
+  end
+
+  return add_files(cmd, opts)
 end
 
 function M.remove(opts)

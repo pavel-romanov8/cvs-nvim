@@ -14,8 +14,12 @@ function M.open_current(bufnr)
   return require("cvs.features.status.service").open_current(bufnr)
 end
 
-function M.add_current(bufnr)
-  return require("cvs.features.status.service").add_current(bufnr)
+function M.add_current(bufnr, start_row, end_row)
+  return require("cvs.features.status.service").add_current(bufnr, start_row, end_row)
+end
+
+function M.add_binary(bufnr, start_row, end_row)
+  return require("cvs.features.status.service").add_binary(bufnr, start_row, end_row)
 end
 
 function M.remove_current(bufnr)
@@ -24,6 +28,14 @@ end
 
 function M.toggle_inline_diff(bufnr)
   return require("cvs.features.status.service").toggle_inline_diff(bufnr)
+end
+
+function M.toggle_selection(bufnr, start_row, end_row)
+  return require("cvs.features.status.service").toggle_selection(bufnr, start_row, end_row)
+end
+
+function M.commit_selected(bufnr)
+  return require("cvs.features.status.service").commit_selected(bufnr)
 end
 
 return M

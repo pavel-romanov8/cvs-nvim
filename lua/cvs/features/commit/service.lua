@@ -11,6 +11,14 @@ local util = require("cvs.core.util")
 local M = {}
 
 local function scope_label(workspace, opts)
+  if opts.files and #opts.files > 0 then
+    if #opts.files == 1 then
+      return opts.files[1]
+    end
+
+    return ("%d selected files"):format(#opts.files)
+  end
+
   if opts.path then
     local prefix = workspace.root_dir .. "/"
     if opts.path:sub(1, #prefix) == prefix then
@@ -23,8 +31,11 @@ local function scope_label(workspace, opts)
   return "workspace"
 end
 
-local function refresh_status(opts)
-  local refresh_opts = vim.tbl_extend("force", {}, opts or {}, { force = true })
+local function refresh_status(workspace, opts)
+  local refresh_opts = vim.tbl_extend("force", {}, opts or {}, {
+    force = true,
+    workspace = workspace,
+  })
   local ok, result = pcall(require("cvs.features.status.service").collect, refresh_opts)
   if ok then
     return result
@@ -34,11 +45,21 @@ local function refresh_status(opts)
 end
 
 local function build_view_state(workspace, opts)
+  local command_opts = {}
+  if opts.files and #opts.files > 0 then
+    command_opts.files = vim.deepcopy(opts.files)
+  elseif opts.path then
+    command_opts.path = opts.path
+  end
+
   return {
     phase = "editing",
     workspace = workspace,
     scope_label = scope_label(workspace, opts),
-    opts = vim.tbl_extend("force", {}, opts),
+    opts = command_opts,
+    files = vim.deepcopy(command_opts.files or {}),
+    source_bufnr = opts.source_bufnr,
+    source_win = opts.source_win,
     message_lines = { "" },
     messages = {},
   }
@@ -47,7 +68,11 @@ end
 function M.open(opts)
   opts = opts or {}
 
-  local workspace, err = context.detect(opts.path)
+  local workspace = opts.workspace
+  local err
+  if not workspace then
+    workspace, err = context.detect(opts.path)
+  end
   if not workspace then
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
     return nil, err
@@ -61,6 +86,32 @@ function M.open(opts)
   end
 
   return require("cvs.features.commit.buffer").open(build_view_state(workspace, opts), opts)
+end
+
+local function refresh_source(view_state)
+  if view_state.source_bufnr and vim.api.nvim_buf_is_valid(view_state.source_bufnr) then
+    local ok, result = pcall(require("cvs.features.status.service").refresh, view_state.source_bufnr)
+    if ok then
+      return result
+    end
+  end
+
+  return refresh_status(view_state.workspace, view_state.opts)
+end
+
+local function focus_source(view_state)
+  local winid = view_state.source_win
+  if winid and vim.api.nvim_win_is_valid(winid) then
+    vim.api.nvim_set_current_win(winid)
+    return
+  end
+
+  if view_state.source_bufnr and vim.api.nvim_buf_is_valid(view_state.source_bufnr) then
+    local winids = vim.fn.win_findbuf(view_state.source_bufnr)
+    if winids[1] and vim.api.nvim_win_is_valid(winids[1]) then
+      vim.api.nvim_set_current_win(winids[1])
+    end
+  end
 end
 
 function M.submit(bufnr)
@@ -112,9 +163,7 @@ function M.submit(bufnr)
         view_state.result = result
         view_state.messages = messages
         view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
-        view_state.status_snapshot = refresh_status(view_state.opts)
-
-        require("cvs.features.commit.buffer").update(bufnr, view_state)
+        view_state.status_snapshot = refresh_source(view_state)
 
         if result.code == 0 then
           events.emit("CvsChanged", {
@@ -122,9 +171,18 @@ function M.submit(bufnr)
             result = result,
             operation = "commit",
             scope = view_state.scope_label,
+            files = view_state.files,
           })
           util.notify(("CVS commit completed for %s."):format(view_state.scope_label))
+
+          if view_state.source_bufnr then
+            require("cvs.features.commit.buffer").close(bufnr)
+            focus_source(view_state)
+          else
+            require("cvs.features.commit.buffer").update(bufnr, view_state)
+          end
         else
+          require("cvs.features.commit.buffer").update(bufnr, view_state)
           local message_text = messages[1] or ("CVS commit exited with code %d."):format(result.code)
           util.notify(message_text, vim.log.levels.WARN)
         end

@@ -33,6 +33,12 @@ local section_titles = {
   [types.status.patched] = "Patched",
 }
 
+local committable_statuses = {
+  [types.status.modified] = true,
+  [types.status.added] = true,
+  [types.status.removed] = true,
+}
+
 local function scope_label(workspace, opts)
   if opts.path then
     local prefix = workspace.root_dir .. "/"
@@ -52,10 +58,15 @@ local function sort_items(items)
   end)
 end
 
-local function build_sections(snapshot)
+local function build_sections(snapshot, selected)
   local grouped = {}
   local counts = {}
   local total_count = 0
+  local selected_state = {}
+  local selectable_count = 0
+  local selected_count = 0
+
+  selected = selected or {}
 
   for _, file in ipairs(snapshot.files or {}) do
     -- U reports an incoming repository change, not a working-copy change.
@@ -68,14 +79,30 @@ local function build_sections(snapshot)
           kind = file.status,
           title = section_titles[file.status] or file.status,
           items = {},
+          selectable_count = 0,
+          selected_count = 0,
         }
       end
 
+      local selectable = committable_statuses[file.status] == true
+      local is_selected = selectable and selected[file.path] == true
       grouped[file.status].items[#grouped[file.status].items + 1] = {
         code = file.code,
         path = file.path,
         status = file.status,
+        selectable = selectable,
+        selected = is_selected,
       }
+
+      if selectable then
+        selectable_count = selectable_count + 1
+        grouped[file.status].selectable_count = grouped[file.status].selectable_count + 1
+        if is_selected then
+          selected_state[file.path] = true
+          selected_count = selected_count + 1
+          grouped[file.status].selected_count = grouped[file.status].selected_count + 1
+        end
+      end
     end
   end
 
@@ -95,12 +122,13 @@ local function build_sections(snapshot)
     return (left.title or "") < (right.title or "")
   end)
 
-  return sections, counts, total_count
+  return sections, counts, total_count, selected_state, selectable_count, selected_count
 end
 
 local function build_view_state(snapshot, opts, previous)
   previous = previous or {}
-  local sections, counts, total_count = build_sections(snapshot)
+  local sections, counts, total_count, selected, selectable_count, selected_count =
+    build_sections(snapshot, previous.selected)
   local stored_opts = vim.tbl_extend("force", {}, opts or {})
   stored_opts.force = nil
 
@@ -114,8 +142,42 @@ local function build_view_state(snapshot, opts, previous)
     sections = sections,
     counts = counts,
     total_count = total_count,
+    selected = selected,
+    selectable_count = selectable_count,
+    selected_count = selected_count,
     messages = vim.deepcopy(previous.messages or snapshot.messages or {}),
   }
+end
+
+local function update_selection(view_state)
+  local selected = view_state.selected or {}
+  local selected_state = {}
+  local selectable_count = 0
+  local selected_count = 0
+
+  for _, section in ipairs(view_state.sections or {}) do
+    section.selectable_count = 0
+    section.selected_count = 0
+
+    for _, item in ipairs(section.items or {}) do
+      item.selectable = committable_statuses[item.status] == true
+      item.selected = item.selectable and selected[item.path] == true
+
+      if item.selectable then
+        selectable_count = selectable_count + 1
+        section.selectable_count = section.selectable_count + 1
+        if item.selected then
+          selected_state[item.path] = true
+          selected_count = selected_count + 1
+          section.selected_count = section.selected_count + 1
+        end
+      end
+    end
+  end
+
+  view_state.selected = selected_state
+  view_state.selectable_count = selectable_count
+  view_state.selected_count = selected_count
 end
 
 local function cache_key(opts)
@@ -267,7 +329,11 @@ end
 function M.collect(opts)
   opts = opts or {}
 
-  local workspace, err = context.detect(opts.path)
+  local workspace = opts.workspace
+  local err
+  if not workspace then
+    workspace, err = context.detect(opts.path)
+  end
   if not workspace then
     return nil, err
   end
@@ -361,7 +427,85 @@ function M.refresh(bufnr, extra)
 
   return update_view(bufnr, build_view_state(snapshot, view_state.opts, {
     messages = extra.messages,
+    selected = view_state.selected,
   }))
+end
+
+function M.toggle_selection(bufnr, start_row, end_row)
+  local attachment, view_state = get_attachment(bufnr)
+  if not attachment then
+    return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
+  end
+
+  local targets = require("cvs.features.status.buffer").get_targets(bufnr, start_row, end_row)
+  if #targets == 0 then
+    util.notify("Only modified, added, or removed files can be selected for commit.", vim.log.levels.WARN)
+    return nil
+  end
+
+  view_state.selected = view_state.selected or {}
+  local select_targets = false
+  for _, item in ipairs(targets) do
+    if not view_state.selected[item.path] then
+      select_targets = true
+      break
+    end
+  end
+
+  for _, item in ipairs(targets) do
+    view_state.selected[item.path] = select_targets or nil
+  end
+
+  update_selection(view_state)
+  update_view(bufnr, view_state)
+  return select_targets
+end
+
+function M.commit_selected(bufnr)
+  local attachment, current_state = get_attachment(bufnr)
+  if not attachment then
+    return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
+  end
+
+  if (current_state.selected_count or 0) == 0 then
+    local err = errors.new("commit_files_empty", "select at least one file before committing")
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
+  end
+
+  local view_state, err = M.refresh(bufnr)
+  if not view_state then
+    return nil, err
+  end
+
+  local files = {}
+  for path, selected in pairs(view_state.selected or {}) do
+    if selected then
+      files[#files + 1] = path
+    end
+  end
+  table.sort(files)
+
+  if #files == 0 then
+    err = errors.new("commit_files_empty", "select at least one file before committing")
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
+  end
+
+  local source_win
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    if vim.api.nvim_win_is_valid(winid) then
+      source_win = winid
+      break
+    end
+  end
+
+  return require("cvs.features.commit.service").open({
+    workspace = view_state.workspace,
+    files = files,
+    source_bufnr = bufnr,
+    source_win = source_win,
+  })
 end
 
 function M.open_current(bufnr)
@@ -456,34 +600,77 @@ function M.toggle_inline_diff(bufnr)
   end)
 end
 
-function M.add_current(bufnr)
+local function add_targets(bufnr, start_row, end_row, binary)
   local attachment, view_state = get_attachment(bufnr)
   if not attachment then
     return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
   end
 
-  local item = require("cvs.features.status.buffer").get_current_item(bufnr)
-  if not item then
+  local status_buffer = require("cvs.features.status.buffer")
+  local targets, skipped
+  if binary then
+    targets, skipped = status_buffer.get_binary_add_targets(bufnr, start_row, end_row)
+  else
+    targets, skipped = status_buffer.get_add_targets(bufnr, start_row, end_row)
+  end
+
+  if #targets == 0 then
+    local message = "Only unknown or removed files can be added from this view."
+    if binary then
+      message = "Only unknown files can be added as binary from this view."
+    end
+    util.notify(message, vim.log.levels.WARN)
     return nil
   end
 
-  if item.status ~= types.status.unknown and item.status ~= types.status.removed then
-    util.notify("Only unknown or removed files can be added from this view.", vim.log.levels.WARN)
-    return nil
+  if skipped > 0 then
+    local suffix = skipped == 1 and "" or "s"
+    local mode = binary and " as binary" or ""
+    util.notify(("Skipped %d file%s that cannot be added%s."):format(skipped, suffix, mode), vim.log.levels.WARN)
   end
 
-  local target = resolve_target_path(view_state.workspace, item.path)
+  local files = {}
+  for _, item in ipairs(targets) do
+    files[#files + 1] = item.path
+  end
 
   return require("cvs.features.files.service").add({
-    path = target,
+    workspace = view_state.workspace,
+    files = files,
+    binary = binary,
     on_complete = function(result)
       if not vim.api.nvim_buf_is_valid(bufnr) then
         return
       end
 
-      local message = result.code == 0
-        and ((item.status == types.status.removed and "Restored %s in CVS.") or "Added %s to CVS."):format(item.path)
-        or (result.stderr[1] or result.stdout[1] or ("CVS add exited with code %d."):format(result.code))
+      local current_attachment, current_state = get_attachment(bufnr)
+      if not current_attachment then
+        return
+      end
+
+      current_state.selected = current_state.selected or {}
+      for _, item in ipairs(targets) do
+        if result.code == 0 or item.status == types.status.unknown then
+          current_state.selected[item.path] = true
+        end
+      end
+
+      local message
+      if result.code == 0 and #targets == 1 then
+        if binary then
+          message = ("Added %s to CVS as binary."):format(targets[1].path)
+        elseif targets[1].status == types.status.removed then
+          message = ("Restored %s in CVS."):format(targets[1].path)
+        else
+          message = ("Added %s to CVS."):format(targets[1].path)
+        end
+      elseif result.code == 0 and binary then
+        message = ("Added %d binary files to CVS."):format(#targets)
+      elseif result.code == 0 then
+        message = ("Added or restored %d files in CVS."):format(#targets)
+      else
+        message = result.stderr[1] or result.stdout[1] or ("CVS add exited with code %d."):format(result.code)
+      end
 
       M.refresh(bufnr, {
         messages = { message },
@@ -491,6 +678,14 @@ function M.add_current(bufnr)
       })
     end,
   })
+end
+
+function M.add_current(bufnr, start_row, end_row)
+  return add_targets(bufnr, start_row, end_row, false)
+end
+
+function M.add_binary(bufnr, start_row, end_row)
+  return add_targets(bufnr, start_row, end_row, true)
 end
 
 function M.remove_current(bufnr)

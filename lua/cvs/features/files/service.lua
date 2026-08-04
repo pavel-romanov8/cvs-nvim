@@ -36,20 +36,75 @@ local function resolve_target_path(opts, action_name)
   return nil, errors.new("path_missing", ("%s requires a file or directory path"):format(action_name or "CvsAdd"))
 end
 
-local function run_mutation(action)
-  local opts = action.opts or {}
-  local target_path, path_err = resolve_target_path(opts, action.command_name)
-  if not target_path then
-    util.notify(errors.to_string(path_err), vim.log.levels.ERROR)
-    return nil, path_err
+local function normalize_workspace_files(workspace, files)
+  if not workspace or not workspace.root_dir then
+    return nil, nil, errors.new("workspace_missing", "bulk CVS file operations require an explicit workspace")
   end
 
-  opts = vim.tbl_extend("force", {}, opts, { path = target_path })
+  local root_dir = util.normalize(workspace.root_dir)
+  local command_files = {}
+  local target_paths = {}
+  local seen = {}
 
-  local workspace, err = context.detect(opts.path)
-  if not workspace then
-    util.notify(errors.to_string(err), vim.log.levels.ERROR)
-    return nil, err
+  for _, file in ipairs(files or {}) do
+    local normalized = util.normalize(file)
+    if normalized then
+      local target = vim.startswith(normalized, "/") and normalized or util.normalize(util.path_join(root_dir, normalized))
+      local inside_workspace = target == root_dir
+        or root_dir == "/"
+        or vim.startswith(target, root_dir .. "/")
+      if not inside_workspace or target == root_dir then
+        return nil, nil, errors.new(
+          "path_outside_workspace",
+          ("CVS target is outside the workspace: %s"):format(file)
+        )
+      end
+
+      local relative = root_dir == "/" and target:sub(2) or target:sub(#root_dir + 2)
+      if not seen[relative] then
+        seen[relative] = true
+        command_files[#command_files + 1] = relative
+        target_paths[#target_paths + 1] = target
+      end
+    end
+  end
+
+  if #command_files == 0 then
+    return nil, nil, errors.new("files_missing", "select at least one file for the CVS operation")
+  end
+
+  return command_files, target_paths
+end
+
+local function run_mutation(action)
+  local opts = action.opts or {}
+  local workspace = opts.workspace
+  local command_files
+  local target_paths
+  local err
+
+  if opts.files and #opts.files > 0 then
+    command_files, target_paths, err = normalize_workspace_files(workspace, opts.files)
+    if not command_files then
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return nil, err
+    end
+  else
+    local target_path
+    target_path, err = resolve_target_path(opts, action.command_name)
+    if not target_path then
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return nil, err
+    end
+
+    workspace, err = context.detect(target_path)
+    if not workspace then
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return nil, err
+    end
+
+    command_files = { target_path }
+    target_paths = { target_path }
   end
 
   local caps = capabilities.detect()
@@ -59,8 +114,12 @@ local function run_mutation(action)
     return nil, err
   end
 
-  local command = action.build_command(opts)
-  local label = scope_label(workspace, target_path)
+  local command_opts = vim.tbl_extend("force", {}, opts)
+  command_opts.path = nil
+  command_opts.files = command_files
+  command_opts.workspace = nil
+  local command = action.build_command(command_opts)
+  local label = #target_paths == 1 and scope_label(workspace, target_paths[1]) or ("%d files"):format(#target_paths)
   if queue.is_busy(workspace.root_dir) then
     util.notify(("Queued CVS %s for %s."):format(action.operation, label))
   end
@@ -77,7 +136,9 @@ local function run_mutation(action)
             root_dir = workspace.root_dir,
             result = result,
             operation = action.operation,
-            path = target_path,
+            path = #target_paths == 1 and target_paths[1] or nil,
+            files = command_files,
+            binary = opts.binary == true,
           })
           util.notify((action.success_message):format(label))
         else
@@ -91,9 +152,12 @@ local function run_mutation(action)
           opts.on_complete(result, {
             workspace = workspace,
             label = label,
-            path = target_path,
+            path = #target_paths == 1 and target_paths[1] or nil,
+            files = command_files,
+            paths = target_paths,
             command = command,
             operation = action.operation,
+            binary = opts.binary == true,
           })
         end
       end)
@@ -133,5 +197,6 @@ end
 
 M._resolve_target_path = resolve_target_path
 M._scope_label = scope_label
+M._normalize_workspace_files = normalize_workspace_files
 
 return M

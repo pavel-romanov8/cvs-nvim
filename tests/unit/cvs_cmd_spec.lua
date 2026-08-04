@@ -17,6 +17,20 @@ return function()
   local add_cmd = cmd.add({ path = "pkg/file.lua" })
   assert_eq(table.concat(add_cmd, " "), "cvs -f add pkg/file.lua", "add command includes path")
 
+  local bulk_add_cmd = cmd.add({ files = { "pkg/one.lua", "pkg/two.lua" } })
+  assert_eq(
+    table.concat(bulk_add_cmd, " "),
+    "cvs -f add pkg/one.lua pkg/two.lua",
+    "add command includes multiple files"
+  )
+
+  local binary_add_cmd = cmd.add({ files = { "assets/logo.png" }, binary = true })
+  assert_eq(
+    table.concat(binary_add_cmd, " "),
+    "cvs -f add -kb assets/logo.png",
+    "binary add sets the CVS binary keyword mode"
+  )
+
   local commit_cmd = cmd.commit({
     message = "Fix it",
     files = { "pkg/file.lua", "pkg/other.lua" },

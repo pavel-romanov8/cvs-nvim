@@ -32,8 +32,8 @@ end
 
 local function first_item_row(row_map)
   local first = nil
-  for row in pairs(row_map or {}) do
-    if not first or row < first then
+  for row, target in pairs(row_map or {}) do
+    if target.kind == "file" and (not first or row < first) then
       first = row
     end
   end
@@ -49,7 +49,70 @@ function M.get_current_item(bufnr)
   end
 
   local row = vim.api.nvim_win_get_cursor(0)[1]
-  return view_state.row_map[row]
+  local target = view_state.row_map[row]
+  return target and target.kind == "file" and target.item or nil
+end
+
+local function collect_targets(bufnr, start_row, end_row, predicate)
+  local attachment = state.get_buffer(bufnr)
+  local view_state = attachment and attachment.view_state
+  if not view_state or not view_state.row_map then
+    return {}
+  end
+
+  start_row = start_row or vim.api.nvim_win_get_cursor(0)[1]
+  end_row = end_row or start_row
+  if start_row > end_row then
+    start_row, end_row = end_row, start_row
+  end
+
+  local targets = {}
+  local seen = {}
+  local skipped = 0
+  local include_sections = start_row == end_row
+  local function append(item)
+    if not item or seen[item.path] then
+      return
+    end
+
+    seen[item.path] = true
+    if predicate(item) then
+      targets[#targets + 1] = item
+    else
+      skipped = skipped + 1
+    end
+  end
+
+  for row = start_row, end_row do
+    local target = view_state.row_map[row]
+    if target and target.kind == "file" then
+      append(target.item)
+    elseif include_sections and target and target.kind == "section" then
+      for _, item in ipairs(target.section.items or {}) do
+        append(item)
+      end
+    end
+  end
+
+  return targets, skipped
+end
+
+function M.get_targets(bufnr, start_row, end_row)
+  return collect_targets(bufnr, start_row, end_row, function(item)
+    return item.selectable
+  end)
+end
+
+function M.get_add_targets(bufnr, start_row, end_row)
+  return collect_targets(bufnr, start_row, end_row, function(item)
+    return item.status == "unknown" or item.status == "removed"
+  end)
+end
+
+function M.get_binary_add_targets(bufnr, start_row, end_row)
+  return collect_targets(bufnr, start_row, end_row, function(item)
+    return item.status == "unknown"
+  end)
 end
 
 function M.open(view_state, opts)
@@ -98,11 +161,59 @@ function M.open(view_state, opts)
     },
     {
       mode = "n",
+      lhs = "-",
+      rhs = function()
+        actions.toggle_selection(bufnr)
+      end,
+      desc = "Toggle CVS commit selection",
+    },
+    {
+      mode = "x",
+      lhs = "-",
+      rhs = function()
+        actions.toggle_selection(bufnr, vim.fn.line("v"), vim.fn.line("."))
+      end,
+      desc = "Toggle CVS commit selection",
+    },
+    {
+      mode = "n",
+      lhs = "cc",
+      rhs = function()
+        actions.commit_selected(bufnr)
+      end,
+      desc = "Commit selected CVS files",
+    },
+    {
+      mode = "n",
       lhs = "a",
       rhs = function()
         actions.add_current(bufnr)
       end,
       desc = "Add current file to CVS",
+    },
+    {
+      mode = "x",
+      lhs = "a",
+      rhs = function()
+        actions.add_current(bufnr, vim.fn.line("v"), vim.fn.line("."))
+      end,
+      desc = "Add selected files to CVS",
+    },
+    {
+      mode = "n",
+      lhs = "A",
+      rhs = function()
+        actions.add_binary(bufnr)
+      end,
+      desc = "Add current file to CVS as binary",
+    },
+    {
+      mode = "x",
+      lhs = "A",
+      rhs = function()
+        actions.add_binary(bufnr, vim.fn.line("v"), vim.fn.line("."))
+      end,
+      desc = "Add selected files to CVS as binary",
     },
     {
       mode = "n",

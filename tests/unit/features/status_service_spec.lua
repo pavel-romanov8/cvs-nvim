@@ -42,6 +42,8 @@ return function()
   assert_eq(view_state.counts.unknown, 1, "unknown count")
   assert_eq(view_state.counts.updated, nil, "updated count is hidden")
   assert_eq(view_state.messages[1], "status warning", "messages are preserved")
+  assert_eq(view_state.selectable_count, 3, "committable file count")
+  assert_eq(view_state.selected_count, 0, "initial selection is empty")
 
   local modified = find_section(view_state, "modified")
   local unknown = find_section(view_state, "unknown")
@@ -49,6 +51,21 @@ return function()
 
   assert_eq(#modified.items, 1, "modified section item count")
   assert_eq(modified.items[1].path, "lua/cvs/init.lua", "modified item path")
+  assert_eq(modified.items[1].selectable, true, "modified item is selectable")
+  assert_eq(modified.items[1].selected, false, "modified item starts unselected")
   assert_eq(#unknown.items, 1, "unknown section item count")
+  assert_eq(unknown.items[1].selectable, false, "unknown item is not selectable")
   assert_eq(updated, nil, "updated section is hidden")
+
+  local selected = service._build_view_state(snapshot, {}, {
+    selected = {
+      ["lua/cvs/init.lua"] = true,
+      ["notes.txt"] = true,
+      ["missing.lua"] = true,
+    },
+  })
+  assert_eq(selected.selected_count, 1, "only eligible paths remain selected")
+  assert_eq(selected.selected["lua/cvs/init.lua"], true, "eligible selection is preserved")
+  assert_eq(selected.selected["notes.txt"], nil, "unknown selection is removed")
+  assert_eq(selected.selected["missing.lua"], nil, "missing selection is removed")
 end

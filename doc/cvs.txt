@@ -22,10 +22,15 @@ COMMANDS                                                        *cvs-commands*
 :Cvs[!] [path]
         Open the themed CVS status view in a horizontal split. Move to a file
         and press <CR> to open it. Press = on a modified file to toggle its
-        inline unified diff. Reuses a recent cached snapshot when possible.
-        Cached snapshots expire after five minutes and are discarded when a
-        working-copy buffer is written. Use [!] or press R in the status view
-        to query CVS again immediately.
+        inline unified diff. Press - on a file, visual range, or section
+        heading to toggle the commit selection. Press a on an unknown or
+        removed file, visual range, or section heading to add or restore the
+        eligible files. Press A on an unknown file, visual range, or the
+        Unknown heading to add files in binary mode with -kb. Press cc to open
+        a commit message buffer for the selected files. Reuses a recent cached
+        snapshot when possible. Cached snapshots expire after five minutes
+        and are discarded when a working-copy buffer is written. Use [!] or
+        press R in the status view to query CVS again immediately.
 
                                                          *:CvsStatus*
 :CvsStatus[!] [path]
