@@ -21,16 +21,23 @@ COMMANDS                                                        *cvs-commands*
                                                           *:Cvs*
 :Cvs[!] [path]
         Open the themed CVS status view in a horizontal split. Move to a file
-        and press <CR> to open it. Press = on a modified file to toggle its
-        inline unified diff. Press - on a file, visual range, or section
-        heading to toggle the commit selection. Press a on an unknown or
-        removed file, visual range, or section heading to add or restore the
-        eligible files. Press A on an unknown file, visual range, or the
-        Unknown heading to add files in binary mode with -kb. Press cc to open
-        a commit message buffer for the selected files. Reuses a recent cached
-        snapshot when possible. Cached snapshots expire after five minutes
-        and are discarded when a working-copy buffer is written. Use [!] or
-        press R in the status view to query CVS again immediately.
+        and press <CR> to open it in the original editing window. Use o, gO, O,
+        or p to open it in a horizontal split, vertical split, tab, or preview.
+        Press dd for a full diff against the checked-out revision, or = on a
+        modified file to toggle its inline unified diff. Press - on a file,
+        visual range, or section heading to toggle the commit selection. Press
+        a on an unknown or removed file, visual range, or section heading to
+        add or restore the eligible files. Press A on an unknown file, visual
+        range, or the Unknown heading to add files in binary mode with -kb.
+        Press cc to open a commit message buffer for the selected files.
+
+        Status queries run asynchronously. The buffer opens immediately with
+        a loading message, and refreshes keep the previous snapshot visible
+        while CVS runs. Refreshes preserve the file under the cursor when it
+        remains in the result. A recent cached snapshot is reused when
+        possible. Cached snapshots expire after five minutes and are discarded
+        when a working-copy buffer is written. Use [!] or press R in the status
+        view to query CVS again immediately.
 
                                                          *:CvsStatus*
 :CvsStatus[!] [path]

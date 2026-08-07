@@ -146,6 +146,8 @@ local function build_view_state(snapshot, opts, previous)
     selectable_count = selectable_count,
     selected_count = selected_count,
     messages = vim.deepcopy(previous.messages or snapshot.messages or {}),
+    loading = snapshot.loading == true,
+    refreshing = previous.refreshing == true,
   }
 end
 
@@ -238,6 +240,16 @@ local function store_cached_snapshot(snapshot, opts)
     snapshot = snapshot,
     cached_at = uv.hrtime(),
   })
+end
+
+local function finish_collection(snapshot, opts)
+  state.set_snapshot(snapshot.workspace.root_dir, snapshot)
+  store_cached_snapshot(snapshot, opts)
+  events.emit("CvsStatusRefreshed", {
+    root_dir = snapshot.workspace.root_dir,
+    cached = snapshot.cached == true,
+  })
+  return snapshot
 end
 
 function M.setup()
@@ -339,8 +351,10 @@ function M.collect(opts)
   end
 
   local cache_config = require("cvs.config").get().status.cache
-  if opts.force or cache_config.enabled == false then
+  if opts.force then
     state.invalidate_status_cache(workspace.root_dir)
+  elseif cache_config.enabled == false then
+    state.clear_status_cache(workspace.root_dir)
   end
 
   local cached = cached_snapshot(workspace, opts)
@@ -374,14 +388,73 @@ function M.collect(opts)
     snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
   end
 
-  state.set_snapshot(workspace.root_dir, snapshot)
-  store_cached_snapshot(snapshot, opts)
-  events.emit("CvsStatusRefreshed", {
-    root_dir = workspace.root_dir,
-    cached = false,
-  })
+  return finish_collection(snapshot, opts)
+end
 
-  return snapshot
+function M.collect_async(opts, callback)
+  opts = opts or {}
+  callback = callback or function() end
+
+  local workspace = opts.workspace
+  local err
+  if not workspace then
+    workspace, err = context.detect(opts.path)
+  end
+  if not workspace then
+    callback(nil, err)
+    return nil
+  end
+  local cache_config = require("cvs.config").get().status.cache
+  if opts.force then
+    state.invalidate_status_cache(workspace.root_dir)
+  elseif cache_config.enabled == false then
+    state.clear_status_cache(workspace.root_dir)
+  end
+  local cache_generation = state.get_status_cache_generation(workspace.root_dir)
+
+  local cached = cached_snapshot(workspace, opts)
+  if cached then
+    state.set_snapshot(workspace.root_dir, cached)
+    events.emit("CvsStatusRefreshed", {
+      root_dir = workspace.root_dir,
+      cached = true,
+    })
+    callback(cached)
+    return nil
+  end
+
+  local snapshot = {
+    workspace = workspace,
+    files = {},
+    messages = {},
+    generated_at = os.date("%Y-%m-%d %H:%M:%S"),
+    cached = false,
+  }
+
+  local caps = capabilities.detect()
+  if not caps.executable then
+    snapshot.messages[#snapshot.messages + 1] = ("CVS executable is not available: %s"):format(caps.bin)
+    callback(finish_collection(snapshot, opts))
+    return nil
+  end
+
+  return runner.run(cmd.status(opts), {
+    cwd = workspace.root_dir,
+  }, function(result)
+    if state.get_status_cache_generation(workspace.root_dir) ~= cache_generation then
+      local retry_opts = vim.tbl_extend("force", {}, opts, {
+        force = false,
+      })
+      M.collect_async(retry_opts, callback)
+      return
+    end
+
+    snapshot.result = result
+    local parsed = parse.parse(result.stdout)
+    snapshot.files = parsed.files
+    snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
+    callback(finish_collection(snapshot, opts))
+  end)
 end
 
 function M.open(opts)
@@ -392,23 +465,55 @@ function M.open(opts)
     local attachment = get_attachment(bufnr)
     if attachment then
       if opts.force then
-        return M.refresh(bufnr)
+        M.refresh(bufnr)
       end
 
       return bufnr, vim.api.nvim_get_current_win()
     end
   end
 
-  local snapshot, err = M.collect(opts)
-  if not snapshot then
+  local workspace, err = context.detect(opts.path)
+  if not workspace then
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
     return nil, err
   end
 
-  return require("cvs.features.status.buffer").open(build_view_state(snapshot, opts), opts)
+  local loading_snapshot = {
+    workspace = workspace,
+    files = {},
+    messages = {},
+    generated_at = "-",
+    loading = true,
+  }
+  local bufnr, winid = require("cvs.features.status.buffer").open(build_view_state(loading_snapshot, opts), opts)
+  local attachment = state.get_buffer(bufnr)
+  attachment.status_request_id = (attachment.status_request_id or 0) + 1
+  local request_id = attachment.status_request_id
+  state.attach_buffer(bufnr, attachment)
+  local collect_opts = vim.tbl_extend("force", {}, opts, {
+    workspace = workspace,
+  })
+
+  M.collect_async(collect_opts, function(snapshot, collect_err)
+    local current_attachment = state.get_buffer(bufnr)
+    if not vim.api.nvim_buf_is_valid(bufnr)
+      or not current_attachment
+      or current_attachment.status_request_id ~= request_id
+    then
+      return
+    end
+    if not snapshot then
+      util.notify(errors.to_string(collect_err), vim.log.levels.ERROR)
+      return
+    end
+
+    update_view(bufnr, build_view_state(snapshot, opts))
+  end)
+
+  return bufnr, winid
 end
 
-function M.refresh(bufnr, extra)
+function M.refresh(bufnr, extra, callback)
   extra = extra or {}
 
   local attachment, view_state = get_attachment(bufnr)
@@ -416,19 +521,54 @@ function M.refresh(bufnr, extra)
     return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
   end
 
+  attachment.status_request_id = (attachment.status_request_id or 0) + 1
+  local request_id = attachment.status_request_id
+  state.attach_buffer(bufnr, attachment)
+
+  view_state.refreshing = true
+  update_view(bufnr, view_state)
+
   local collect_opts = vim.tbl_extend("force", {}, view_state.opts, {
     force = extra.force ~= false,
+    workspace = view_state.workspace,
   })
-  local snapshot, err = M.collect(collect_opts)
-  if not snapshot then
-    util.notify(errors.to_string(err), vim.log.levels.ERROR)
-    return nil, err
-  end
+  local selected = vim.deepcopy(view_state.selected or {})
 
-  return update_view(bufnr, build_view_state(snapshot, view_state.opts, {
-    messages = extra.messages,
-    selected = view_state.selected,
-  }))
+  return M.collect_async(collect_opts, function(snapshot, err)
+    local current_attachment, current_state = get_attachment(bufnr)
+    if not current_attachment then
+      if callback then
+        callback(nil, errors.new("status_buffer_missing", "the CVS status buffer was closed during refresh"))
+      end
+      return
+    end
+    if current_attachment.status_request_id ~= request_id then
+      if callback then
+        callback(nil, errors.new("status_refresh_superseded", "the CVS status refresh was superseded"))
+      end
+      return
+    end
+
+    if not snapshot then
+      current_state.refreshing = false
+      update_view(bufnr, current_state)
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      if callback then
+        callback(nil, err)
+      end
+      return
+    end
+
+    local next_state = build_view_state(snapshot, view_state.opts, {
+      messages = extra.messages,
+      selected = selected,
+    })
+    next_state.refreshing = false
+    update_view(bufnr, next_state)
+    if callback then
+      callback(next_state)
+    end
+  end)
 end
 
 function M.toggle_selection(bufnr, start_row, end_row)
@@ -473,42 +613,46 @@ function M.commit_selected(bufnr)
     return nil, err
   end
 
-  local view_state, err = M.refresh(bufnr)
-  if not view_state then
-    return nil, err
-  end
-
-  local files = {}
-  for path, selected in pairs(view_state.selected or {}) do
-    if selected then
-      files[#files + 1] = path
+  return M.refresh(bufnr, nil, function(view_state, refresh_err)
+    if not view_state then
+      if refresh_err and refresh_err.kind == "status_refresh_superseded" then
+        util.notify("Commit canceled because a newer status refresh started; press cc again.", vim.log.levels.WARN)
+      end
+      return
     end
-  end
-  table.sort(files)
 
-  if #files == 0 then
-    err = errors.new("commit_files_empty", "select at least one file before committing")
-    util.notify(errors.to_string(err), vim.log.levels.ERROR)
-    return nil, err
-  end
-
-  local source_win
-  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
-    if vim.api.nvim_win_is_valid(winid) then
-      source_win = winid
-      break
+    local files = {}
+    for path, selected in pairs(view_state.selected or {}) do
+      if selected then
+        files[#files + 1] = path
+      end
     end
-  end
+    table.sort(files)
 
-  return require("cvs.features.commit.service").open({
-    workspace = view_state.workspace,
-    files = files,
-    source_bufnr = bufnr,
-    source_win = source_win,
-  })
+    if #files == 0 then
+      local err = errors.new("commit_files_empty", "select at least one file before committing")
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return
+    end
+
+    local source_win
+    for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+      if vim.api.nvim_win_is_valid(winid) then
+        source_win = winid
+        break
+      end
+    end
+
+    require("cvs.features.commit.service").open({
+      workspace = view_state.workspace,
+      files = files,
+      source_bufnr = bufnr,
+      source_win = source_win,
+    })
+  end)
 end
 
-function M.open_current(bufnr)
+function M.open_current(bufnr, kind)
   local attachment = state.get_buffer(bufnr)
   if not attachment or attachment.kind ~= "status" then
     return nil
@@ -525,9 +669,37 @@ function M.open_current(bufnr)
     return nil
   end
 
-  vim.api.nvim_set_current_win(target_window(attachment, bufnr))
-  vim.cmd("edit " .. vim.fn.fnameescape(target))
+  local escaped = vim.fn.fnameescape(target)
+  if kind == "split" then
+    vim.cmd("aboveleft split " .. escaped)
+  elseif kind == "vsplit" then
+    vim.cmd("leftabove vsplit " .. escaped)
+  elseif kind == "tab" then
+    vim.cmd("tabedit " .. escaped)
+  elseif kind == "preview" then
+    vim.cmd("pedit " .. escaped)
+  else
+    vim.api.nvim_set_current_win(target_window(attachment, bufnr))
+    vim.cmd("edit " .. escaped)
+  end
   return target
+end
+
+function M.diff_current(bufnr)
+  local attachment = state.get_buffer(bufnr)
+  if not attachment or attachment.kind ~= "status" then
+    return nil
+  end
+
+  local item = require("cvs.features.status.buffer").get_current_item(bufnr)
+  if not item then
+    return nil
+  end
+
+  local target = resolve_target_path(attachment.view_state.workspace, item.path)
+  return require("cvs.features.diff.service").open({
+    path = target,
+  })
 end
 
 function M.toggle_inline_diff(bufnr)

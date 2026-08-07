@@ -1,5 +1,6 @@
 local config = require("cvs.config")
 local commit_service = require("cvs.features.commit.service")
+local diff_service = require("cvs.features.diff.service")
 local service = require("cvs.features.status.service")
 local state = require("cvs.core.state")
 local status_buffer = require("cvs.features.status.buffer")
@@ -76,6 +77,11 @@ return function()
   assert_eq(vim.fn.maparg("A", "n", false, true).desc, "Add current file to CVS as binary", "binary add mapping")
   assert_eq(vim.fn.maparg("A", "x", false, true).desc, "Add selected files to CVS as binary", "visual binary add mapping")
   assert_eq(vim.fn.maparg("cc", "n", false, true).desc, "Commit selected CVS files", "commit selection mapping")
+  assert_eq(vim.fn.maparg("dd", "n", false, true).desc, "Diff current file against its CVS base", "full diff mapping")
+  assert_eq(vim.fn.maparg("o", "n", false, true).desc, "Open current file in a split", "split mapping")
+  assert_eq(vim.fn.maparg("gO", "n", false, true).desc, "Open current file in a vertical split", "vertical split mapping")
+  assert_eq(vim.fn.maparg("O", "n", false, true).desc, "Open current file in a tab", "tab mapping")
+  assert_eq(vim.fn.maparg("p", "n", false, true).desc, "Open current file in preview", "preview mapping")
   assert_eq(state.get_buffer(bufnr).view_state.selected_count, 0, "selection starts empty")
 
   local original_run = runner.run
@@ -110,6 +116,12 @@ return function()
   local modified_row = find_line(bufnr, "M  changed.lua")
   local diff_row = find_line(bufnr, "@@ -1 +1 @@")
   local added_row = find_line(bufnr, "A  new.lua")
+  vim.api.nvim_win_set_cursor(winid, { diff_row, 0 })
+  status_buffer.update(bufnr, vim.deepcopy(state.get_buffer(bufnr).view_state))
+  assert_true(
+    vim.api.nvim_get_current_line():find("@@ -1 +1 @@", 1, true) ~= nil,
+    "rerender preserves the cursor's inline-diff offset"
+  )
   assert_eq(service.toggle_selection(bufnr, modified_row), true, "file row selects its file")
   assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "modified file is selected")
   assert_eq(service.toggle_selection(bufnr, diff_row), false, "inline diff row toggles its parent file")
@@ -135,7 +147,7 @@ return function()
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
 
   local original_add = files_service.add
-  local original_add_collect = service.collect
+  local original_add_collect = service.collect_async
   local add_result = { code = 1, stdout = {}, stderr = { "add failed" } }
   local add_opts
   local added_paths = {}
@@ -149,7 +161,7 @@ return function()
     opts.on_complete(add_result)
     return { "cvs", "add" }
   end
-  service.collect = function()
+  service.collect_async = function(_, callback)
     local function file(path)
       local added = added_paths[path] == true
       return {
@@ -159,7 +171,7 @@ return function()
       }
     end
 
-    return {
+    callback({
       workspace = view_state.workspace,
       generated_at = view_state.generated_at,
       files = {
@@ -170,7 +182,7 @@ return function()
         file("unknown-three.lua"),
       },
       messages = {},
-    }
+    })
   end
 
   local unknown_one_row = find_line(bufnr, "?  unknown-one.lua")
@@ -205,17 +217,17 @@ return function()
   assert_eq(state.get_buffer(bufnr).view_state.selected["unknown-three.lua"], true, "second bulk-added file is selected")
 
   files_service.add = original_add
-  service.collect = original_add_collect
+  service.collect_async = original_add_collect
 
   local existing_bufnr, existing_win = service.open({})
   assert_eq(existing_bufnr, bufnr, ":Cvs reuses the current status buffer")
   assert_eq(existing_win, winid, ":Cvs does not create another status split")
 
-  local original_collect = service.collect
+  local original_collect = service.collect_async
   local forced
-  service.collect = function(opts)
+  service.collect_async = function(opts, callback)
     forced = opts.force
-    return {
+    callback({
       workspace = view_state.workspace,
       generated_at = view_state.generated_at,
       files = {
@@ -223,10 +235,10 @@ return function()
         { code = "A", path = "new.lua", status = "added" },
       },
       messages = {},
-    }
+    })
   end
   service.open({ force = true })
-  service.collect = original_collect
+  service.collect_async = original_collect
   assert_eq(forced, true, ":Cvs! refreshes the current status buffer")
   assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "refresh preserves eligible selection")
   assert_eq(state.get_buffer(bufnr).view_state.selected["new.lua"], nil, "refresh keeps unselected file clear")
@@ -238,14 +250,12 @@ return function()
     commit_opts = opts
     return 999, 998
   end
-  service.refresh = function()
-    return state.get_buffer(bufnr).view_state
+  service.refresh = function(_, _, callback)
+    callback(state.get_buffer(bufnr).view_state)
   end
-  local commit_bufnr, commit_win = service.commit_selected(bufnr)
+  service.commit_selected(bufnr)
   service.refresh = original_commit_refresh
   commit_service.open = original_commit_open
-  assert_eq(commit_bufnr, 999, "selected commit returns commit buffer")
-  assert_eq(commit_win, 998, "selected commit returns commit window")
   assert_eq(#commit_opts.files, 1, "selected commit passes only selected paths")
   assert_eq(commit_opts.files[1], "changed.lua", "selected commit passes selected file")
   assert_eq(commit_opts.workspace.root_dir, temp_dir, "selected commit passes explicit workspace")
@@ -288,6 +298,66 @@ return function()
     "Enter opens the selected file"
   )
   assert_eq(vim.api.nvim_win_get_buf(winid), bufnr, "Enter keeps the status split open")
+
+  vim.api.nvim_set_current_win(winid)
+  modified_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
+
+  local original_diff_open = diff_service.open
+  local diff_opts
+  diff_service.open = function(opts)
+    diff_opts = opts
+    return { mocked = true }
+  end
+  service.diff_current(bufnr)
+  diff_service.open = original_diff_open
+  assert_eq(
+    vim.uv.fs_realpath(diff_opts.path),
+    vim.uv.fs_realpath(temp_dir .. "/changed.lua"),
+    "dd resolves the current working file"
+  )
+
+  local windows_before = #vim.api.nvim_tabpage_list_wins(0)
+  service.open_current(bufnr, "split")
+  assert_eq(#vim.api.nvim_tabpage_list_wins(0), windows_before + 1, "o opens another split")
+  assert_eq(vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)), vim.uv.fs_realpath(temp_dir .. "/changed.lua"), "o opens the file")
+  vim.api.nvim_win_close(0, true)
+
+  vim.api.nvim_set_current_win(winid)
+  service.open_current(bufnr, "vsplit")
+  assert_eq(#vim.api.nvim_tabpage_list_wins(0), windows_before + 1, "gO opens another vertical split")
+  assert_eq(vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)), vim.uv.fs_realpath(temp_dir .. "/changed.lua"), "gO opens the file")
+  vim.api.nvim_win_close(0, true)
+
+  vim.api.nvim_set_current_win(winid)
+  local tabs_before = #vim.api.nvim_list_tabpages()
+  service.open_current(bufnr, "tab")
+  assert_eq(#vim.api.nvim_list_tabpages(), tabs_before + 1, "O opens another tab")
+  assert_eq(vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)), vim.uv.fs_realpath(temp_dir .. "/changed.lua"), "O opens the file")
+  vim.cmd("tabclose!")
+
+  vim.api.nvim_set_current_win(winid)
+  service.open_current(bufnr, "preview")
+  assert_eq(vim.api.nvim_get_current_win(), winid, "p keeps focus in status")
+  assert_eq(#vim.api.nvim_tabpage_list_wins(0), windows_before + 1, "p opens a preview window")
+  vim.cmd("pclose")
+
+  vim.api.nvim_set_current_win(winid)
+  local new_row = find_line(bufnr, "A  new.lua")
+  vim.api.nvim_win_set_cursor(winid, { new_row, 0 })
+  local shifted = vim.deepcopy(state.get_buffer(bufnr).view_state)
+  table.insert(shifted.sections[1].items, 1, {
+    code = "M",
+    path = "before.lua",
+    status = "modified",
+    selectable = true,
+    selected = false,
+  })
+  status_buffer.update(bufnr, shifted)
+  assert_true(
+    vim.api.nvim_get_current_line():find("A  new.lua", 1, true) ~= nil,
+    "refresh preserves the file under the cursor"
+  )
 
   if vim.fn.exists("+winfixbuf") == 1 then
     vim.wo[source_win].winfixbuf = true

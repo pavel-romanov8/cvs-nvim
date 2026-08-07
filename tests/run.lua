@@ -21,6 +21,7 @@ local tests = {
   "tests/ui/annotate_buffer_spec.lua",
   "tests/ui/diff_view_spec.lua",
   "tests/ui/status_buffer_spec.lua",
+  "tests/ui/status_async_spec.lua",
   "tests/unit/features/update_parse_spec.lua",
   "tests/unit/features/update_render_spec.lua",
 }

@@ -31,17 +31,14 @@ local function scope_label(workspace, opts)
   return "workspace"
 end
 
-local function refresh_status(workspace, opts)
+local function refresh_status(workspace, opts, callback)
   local refresh_opts = vim.tbl_extend("force", {}, opts or {}, {
     force = true,
     workspace = workspace,
   })
-  local ok, result = pcall(require("cvs.features.status.service").collect, refresh_opts)
-  if ok then
-    return result
-  end
-
-  return nil
+  return require("cvs.features.status.service").collect_async(refresh_opts, function(result)
+    callback(result)
+  end)
 end
 
 local function build_view_state(workspace, opts)
@@ -88,15 +85,12 @@ function M.open(opts)
   return require("cvs.features.commit.buffer").open(build_view_state(workspace, opts), opts)
 end
 
-local function refresh_source(view_state)
+local function refresh_source(view_state, callback)
   if view_state.source_bufnr and vim.api.nvim_buf_is_valid(view_state.source_bufnr) then
-    local ok, result = pcall(require("cvs.features.status.service").refresh, view_state.source_bufnr)
-    if ok then
-      return result
-    end
+    return require("cvs.features.status.service").refresh(view_state.source_bufnr, nil, callback)
   end
 
-  return refresh_status(view_state.workspace, view_state.opts)
+  return refresh_status(view_state.workspace, view_state.opts, callback)
 end
 
 local function focus_source(view_state)
@@ -155,48 +149,56 @@ function M.submit(bufnr)
     runner.run(command, {
       cwd = view_state.workspace.root_dir,
     }, function(result)
-      local ok, callback_err = pcall(function()
-        local messages = vim.deepcopy(result.stdout)
-        vim.list_extend(messages, result.stderr)
+      local function complete(status_snapshot)
+        local ok, callback_err = pcall(function()
+          local messages = vim.deepcopy(result.stdout)
+          vim.list_extend(messages, result.stderr)
 
-        view_state.phase = "done"
-        view_state.result = result
-        view_state.messages = messages
-        view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
-        view_state.status_snapshot = refresh_source(view_state)
+          view_state.phase = "done"
+          view_state.result = result
+          view_state.messages = messages
+          view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
+          view_state.status_snapshot = status_snapshot
 
-        if result.code == 0 then
-          events.emit("CvsChanged", {
-            root_dir = view_state.workspace.root_dir,
-            result = result,
-            operation = "commit",
-            scope = view_state.scope_label,
-            files = view_state.files,
-          })
-          util.notify(("CVS commit completed for %s."):format(view_state.scope_label))
+          if result.code == 0 then
+            events.emit("CvsChanged", {
+              root_dir = view_state.workspace.root_dir,
+              result = result,
+              operation = "commit",
+              scope = view_state.scope_label,
+              files = view_state.files,
+            })
+            util.notify(("CVS commit completed for %s."):format(view_state.scope_label))
 
-          if view_state.source_bufnr then
-            require("cvs.features.commit.buffer").close(bufnr)
-            focus_source(view_state)
+            if view_state.source_bufnr then
+              require("cvs.features.commit.buffer").close(bufnr)
+              focus_source(view_state)
+            else
+              require("cvs.features.commit.buffer").update(bufnr, view_state)
+            end
           else
             require("cvs.features.commit.buffer").update(bufnr, view_state)
+            local message_text = messages[1] or ("CVS commit exited with code %d."):format(result.code)
+            util.notify(message_text, vim.log.levels.WARN)
           end
-        else
-          require("cvs.features.commit.buffer").update(bufnr, view_state)
-          local message_text = messages[1] or ("CVS commit exited with code %d."):format(result.code)
-          util.notify(message_text, vim.log.levels.WARN)
-        end
-      end)
+        end)
 
-      if not ok then
-        view_state.phase = "done"
-        view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
-        view_state.messages = { ("Internal error: %s"):format(callback_err) }
-        require("cvs.features.commit.buffer").update(bufnr, view_state)
-        util.notify(("CVS commit failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
+        if not ok then
+          view_state.phase = "done"
+          view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
+          view_state.messages = { ("Internal error: %s"):format(callback_err) }
+          require("cvs.features.commit.buffer").update(bufnr, view_state)
+          util.notify(("CVS commit failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
+        end
+
+        done()
       end
 
-      done()
+      local ok, refresh_err = pcall(refresh_source, view_state, complete)
+      if not ok then
+        util.notify(("CVS status refresh failed internally: %s"):format(refresh_err), vim.log.levels.ERROR)
+        complete(nil)
+      end
     end)
   end, function(queue_err)
     util.notify(("CVS commit queue error: %s"):format(queue_err), vim.log.levels.ERROR)

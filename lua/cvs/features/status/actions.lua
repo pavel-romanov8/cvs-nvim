@@ -10,8 +10,12 @@ function M.refresh(bufnr)
   return require("cvs.features.status.service").refresh(bufnr)
 end
 
-function M.open_current(bufnr)
-  return require("cvs.features.status.service").open_current(bufnr)
+function M.open_current(bufnr, kind)
+  return require("cvs.features.status.service").open_current(bufnr, kind)
+end
+
+function M.diff_current(bufnr)
+  return require("cvs.features.status.service").diff_current(bufnr)
 end
 
 function M.add_current(bufnr, start_row, end_row)

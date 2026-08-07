@@ -104,7 +104,7 @@ function M.lines(view_state)
   highlight_label(highlights, #lines, lines[#lines])
   lines[#lines + 1] = ("Snapshot: %s%s"):format(
     view_state.generated_at or "-",
-    view_state.cached and " (cached)" or ""
+    view_state.refreshing and " (refreshing)" or (view_state.cached and " (cached)" or "")
   )
   highlight_label(highlights, #lines, lines[#lines])
   lines[#lines + 1] = ("Files: %d"):format(view_state.total_count or 0)
@@ -115,7 +115,11 @@ function M.lines(view_state)
   )
   highlight_label(highlights, #lines, lines[#lines])
 
-  if (view_state.total_count or 0) == 0 then
+  if view_state.loading then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Loading CVS status..."
+    highlight(highlights, #lines, "CvsMuted")
+  elseif (view_state.total_count or 0) == 0 then
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Working copy is clean for this scope."
     highlight(highlights, #lines, "CvsMuted")
@@ -161,6 +165,10 @@ function M.lines(view_state)
 
   lines[#lines + 1] = ""
   lines[#lines + 1] = "<CR> opens the current file"
+  highlight(highlights, #lines, "CvsMuted")
+  lines[#lines + 1] = "o/gO/O/p opens in a split/vsplit/tab/preview"
+  highlight(highlights, #lines, "CvsMuted")
+  lines[#lines + 1] = "dd diffs the current file against its CVS base"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "= toggles the inline diff"
   highlight(highlights, #lines, "CvsMuted")

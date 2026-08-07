@@ -73,9 +73,9 @@ return function()
       command = next_command
       callback(result)
     end
-    status_service.refresh = function(bufnr)
+    status_service.refresh = function(bufnr, _, callback)
       refreshed_bufnr = bufnr
-      return { files = {} }
+      callback({ files = {} })
     end
 
     local commit_bufnr = vim.api.nvim_create_buf(false, true)

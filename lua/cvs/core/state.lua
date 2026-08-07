@@ -1,6 +1,7 @@
 local M = {
   workspaces = {},
   status_cache = {},
+  status_cache_generation = {},
   buffers = {},
 }
 
@@ -29,10 +30,20 @@ function M.get_status_cache(root_dir, key)
   return workspace and workspace[key] or nil
 end
 
-function M.invalidate_status_cache(root_dir)
+function M.clear_status_cache(root_dir)
   root_dir = workspace_key(root_dir)
   M.status_cache[root_dir] = nil
   M.workspaces[root_dir] = nil
+end
+
+function M.invalidate_status_cache(root_dir)
+  root_dir = workspace_key(root_dir)
+  M.clear_status_cache(root_dir)
+  M.status_cache_generation[root_dir] = (M.status_cache_generation[root_dir] or 0) + 1
+end
+
+function M.get_status_cache_generation(root_dir)
+  return M.status_cache_generation[workspace_key(root_dir)] or 0
 end
 
 function M.attach_buffer(bufnr, data)

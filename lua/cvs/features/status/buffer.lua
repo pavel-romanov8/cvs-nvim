@@ -153,6 +153,46 @@ function M.open(view_state, opts)
     },
     {
       mode = "n",
+      lhs = "o",
+      rhs = function()
+        actions.open_current(bufnr, "split")
+      end,
+      desc = "Open current file in a split",
+    },
+    {
+      mode = "n",
+      lhs = "gO",
+      rhs = function()
+        actions.open_current(bufnr, "vsplit")
+      end,
+      desc = "Open current file in a vertical split",
+    },
+    {
+      mode = "n",
+      lhs = "O",
+      rhs = function()
+        actions.open_current(bufnr, "tab")
+      end,
+      desc = "Open current file in a tab",
+    },
+    {
+      mode = "n",
+      lhs = "p",
+      rhs = function()
+        actions.open_current(bufnr, "preview")
+      end,
+      desc = "Open current file in preview",
+    },
+    {
+      mode = "n",
+      lhs = "dd",
+      rhs = function()
+        actions.diff_current(bufnr)
+      end,
+      desc = "Diff current file against its CVS base",
+    },
+    {
+      mode = "n",
       lhs = "=",
       rhs = function()
         actions.toggle_inline_diff(bufnr)
@@ -257,8 +297,26 @@ function M.update(bufnr, view_state)
 
   local winids = vim.fn.win_findbuf(bufnr)
   local cursor = nil
+  local cursor_path = nil
+  local cursor_path_offset = 0
+  local was_loading = false
   if winids[1] and vim.api.nvim_win_is_valid(winids[1]) then
     cursor = vim.api.nvim_win_get_cursor(winids[1])
+    local current = state.get_buffer(bufnr)
+    local current_view = current and current.view_state
+    local current_row_map = current_view and current_view.row_map
+    local target = current_row_map and current_row_map[cursor[1]]
+    was_loading = current_view and current_view.loading == true
+    if target and target.kind == "file" then
+      cursor_path = target.item.path
+      local first = cursor[1]
+      for row, candidate in pairs(current_row_map) do
+        if candidate.kind == "file" and candidate.item.path == cursor_path and row < first then
+          first = row
+        end
+      end
+      cursor_path_offset = cursor[1] - first
+    end
   end
 
   local attachment = state.get_buffer(bufnr) or {}
@@ -272,8 +330,23 @@ function M.update(bufnr, view_state)
 
   if cursor and winids[1] and vim.api.nvim_win_is_valid(winids[1]) then
     local max_line = vim.api.nvim_buf_line_count(bufnr)
+    local row = nil
+    if cursor_path then
+      for candidate, target in pairs(view_state.row_map or {}) do
+        if target.kind == "file" and target.item.path == cursor_path and (not row or candidate < row) then
+          row = candidate
+        end
+      end
+      local offset_row = row and row + cursor_path_offset or nil
+      local offset_target = offset_row and view_state.row_map[offset_row]
+      if offset_target and offset_target.kind == "file" and offset_target.item.path == cursor_path then
+        row = offset_row
+      end
+    elseif was_loading then
+      row = first_item_row(view_state.row_map)
+    end
     vim.api.nvim_win_set_cursor(winids[1], {
-      math.max(1, math.min(cursor[1], max_line)),
+      row or math.max(1, math.min(cursor[1], max_line)),
       cursor[2],
     })
   end

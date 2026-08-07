@@ -34,14 +34,11 @@ local function build_state(phase, workspace, command, opts)
   }
 end
 
-local function refresh_status(opts)
+local function refresh_status(opts, callback)
   local refresh_opts = vim.tbl_extend("force", {}, opts or {}, { force = true })
-  local ok, result = pcall(require("cvs.features.status.service").collect, refresh_opts)
-  if ok then
-    return result
-  end
-
-  return nil
+  return require("cvs.features.status.service").collect_async(refresh_opts, function(result)
+    callback(result)
+  end)
 end
 
 local function complete_state(base, result, parsed)
@@ -83,43 +80,64 @@ function M.run(opts)
     runner.run(command, {
       cwd = workspace.root_dir,
     }, function(result)
-      local ok, callback_err = pcall(function()
+      local ok, parsed_or_err = pcall(function()
         local combined = vim.deepcopy(result.stdout)
         vim.list_extend(combined, result.stderr)
-
-        local parsed = parse.parse(combined)
-        local final_state = complete_state(view_state, result, parsed)
-        final_state.status_snapshot = refresh_status(opts)
-
-        require("cvs.features.update.buffer").update(bufnr, final_state)
-
-        if #parsed.items > 0 or parsed.has_conflicts then
-          events.emit("CvsChanged", {
-            root_dir = workspace.root_dir,
-            result = result,
-            parsed = parsed,
-          })
-        end
-
-        if parsed.has_conflicts then
-          util.notify("CVS update completed with conflicts.", vim.log.levels.WARN)
-        elseif result.code ~= 0 then
-          util.notify(("CVS update exited with code %d."):format(result.code), vim.log.levels.WARN)
-        else
-          util.notify("CVS update completed.")
-        end
+        return parse.parse(combined)
       end)
-
       if not ok then
         require("cvs.features.update.buffer").update(bufnr, vim.tbl_extend("force", view_state, {
           phase = "done",
           completed_at = os.date("%Y-%m-%d %H:%M:%S"),
-          messages = { ("Internal error: %s"):format(callback_err) },
+          messages = { ("Internal error: %s"):format(parsed_or_err) },
         }))
-        util.notify(("CVS update failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
+        util.notify(("CVS update failed internally: %s"):format(parsed_or_err), vim.log.levels.ERROR)
+        done()
+        return
       end
 
-      done()
+      local parsed = parsed_or_err
+      local function complete(status_snapshot)
+        local callback_ok, callback_err = pcall(function()
+          local final_state = complete_state(view_state, result, parsed)
+          final_state.status_snapshot = status_snapshot
+
+          require("cvs.features.update.buffer").update(bufnr, final_state)
+
+          if #parsed.items > 0 or parsed.has_conflicts then
+            events.emit("CvsChanged", {
+              root_dir = workspace.root_dir,
+              result = result,
+              parsed = parsed,
+            })
+          end
+
+          if parsed.has_conflicts then
+            util.notify("CVS update completed with conflicts.", vim.log.levels.WARN)
+          elseif result.code ~= 0 then
+            util.notify(("CVS update exited with code %d."):format(result.code), vim.log.levels.WARN)
+          else
+            util.notify("CVS update completed.")
+          end
+        end)
+
+        if not callback_ok then
+          require("cvs.features.update.buffer").update(bufnr, vim.tbl_extend("force", view_state, {
+            phase = "done",
+            completed_at = os.date("%Y-%m-%d %H:%M:%S"),
+            messages = { ("Internal error: %s"):format(callback_err) },
+          }))
+          util.notify(("CVS update failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
+        end
+
+        done()
+      end
+
+      local refresh_ok, refresh_err = pcall(refresh_status, opts, complete)
+      if not refresh_ok then
+        util.notify(("CVS status refresh failed internally: %s"):format(refresh_err), vim.log.levels.ERROR)
+        complete(nil)
+      end
     end)
   end, function(queue_err)
     util.notify(("CVS update queue error: %s"):format(queue_err), vim.log.levels.ERROR)
