@@ -129,16 +129,19 @@ return function()
 
   modified_row = find_line(bufnr, "M  changed.lua")
   added_row = find_line(bufnr, "A  new.lua")
-  local added_heading = find_line(bufnr, "Added (0/1 selected)")
+  local added_heading = find_line(bufnr, "Added (1)")
   local heading_range = status_buffer.get_targets(bufnr, modified_row, added_heading)
   assert_eq(#heading_range, 1, "range does not expand a crossed section heading")
   assert_eq(heading_range[1].path, "changed.lua", "range includes only covered file rows")
   assert_eq(service.toggle_selection(bufnr, modified_row, added_row), true, "range selects all unique files")
   assert_eq(state.get_buffer(bufnr).view_state.selected_count, 2, "range deduplicates inline diff rows")
-  assert_eq(service.toggle_selection(bufnr, modified_row, added_row), false, "selected range clears all files")
-  assert_eq(state.get_buffer(bufnr).view_state.selected_count, 0, "range is cleared")
+  local selected_heading = find_line(bufnr, "Selected (2)")
+  assert_true(selected_heading ~= nil, "selected files render in a dedicated section")
+  assert_true(find_line(bufnr, "[x]") == nil, "selected files do not render checkboxes")
+  assert_eq(service.toggle_selection(bufnr, selected_heading), false, "selected heading clears all selected files")
+  assert_eq(state.get_buffer(bufnr).view_state.selected_count, 0, "selected section is cleared")
 
-  local modified_heading = find_line(bufnr, "Modified (0/1 selected)")
+  local modified_heading = find_line(bufnr, "Modified (1)")
   assert_eq(service.toggle_selection(bufnr, modified_heading), true, "section heading selects its files")
   assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "heading selects modified file")
 
@@ -253,6 +256,9 @@ return function()
   service.refresh = function(_, _, callback)
     callback(state.get_buffer(bufnr).view_state)
   end
+  selected_heading = find_line(bufnr, "Selected (1)")
+  vim.api.nvim_win_set_cursor(winid, { selected_heading, 0 })
+  assert_true(vim.api.nvim_get_current_line():find("Selected (1)", 1, true) ~= nil, "commit runs from selected heading")
   service.commit_selected(bufnr)
   service.refresh = original_commit_refresh
   commit_service.open = original_commit_open
@@ -290,6 +296,8 @@ return function()
   end
 
   vim.api.nvim_set_current_win(winid)
+  modified_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
   service.open_current(bufnr)
   assert_eq(vim.api.nvim_get_current_win(), source_win, "Enter opens the file in the original window")
   assert_eq(

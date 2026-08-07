@@ -31,21 +31,21 @@ return function()
     },
     sections = {
       {
+        kind = "selected",
+        title = "Selected",
+        selectable_count = 1,
+        selected_count = 1,
+        items = {
+          { code = "A", path = "lua/cvs/new.lua", status = "added", selectable = true, selected = true },
+        },
+      },
+      {
         kind = "modified",
         title = "Modified",
         selectable_count = 1,
         selected_count = 0,
         items = {
           { code = "M", path = "lua/cvs/init.lua", status = "modified", selectable = true, selected = false },
-        },
-      },
-      {
-        kind = "added",
-        title = "Added",
-        selectable_count = 1,
-        selected_count = 1,
-        items = {
-          { code = "A", path = "lua/cvs/new.lua", status = "added", selectable = true, selected = true },
         },
       },
       {
@@ -76,9 +76,12 @@ return function()
   assert_match(text, "Commit selection: 1/2", "commit selection count")
   assert_match(text, "Snapshot: 2026-03-27 12:00:00 (cached)", "cached snapshot marker")
   assert_match(text, "M: 1, A: 1, R: 1, ?: 1", "summary counts")
-  assert_match(text, "Modified (0/1 selected)", "modified section")
-  assert_match(text, "[ ] M  lua/cvs/init.lua", "unselected file line")
-  assert_match(text, "[x] A  lua/cvs/new.lua", "selected file line")
+  assert_match(text, "Selected (1)", "selected section")
+  assert_match(text, "Modified (1)", "modified section")
+  assert_match(text, "    M  lua/cvs/init.lua", "unselected file line")
+  assert_match(text, "    A  lua/cvs/new.lua", "selected file line")
+  assert_true(not text:find("[ ]", 1, true), "unselected files do not use checkboxes")
+  assert_true(not text:find("[x]", 1, true), "selected files do not use checkboxes")
   assert_match(text, "    ?  notes.txt", "non-selectable file line")
   assert_match(text, "   @@ -1 +1 @@", "inline diff hunk")
   assert_match(text, "   -local old = true", "inline diff deletion")

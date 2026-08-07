@@ -14,6 +14,7 @@ local M = {}
 local initialized = false
 
 local status_order = {
+  selected = 0,
   [types.status.modified] = 1,
   [types.status.added] = 2,
   [types.status.removed] = 3,
@@ -60,6 +61,13 @@ end
 
 local function build_sections(snapshot, selected)
   local grouped = {}
+  local selected_section = {
+    kind = "selected",
+    title = "Selected",
+    items = {},
+    selectable_count = 0,
+    selected_count = 0,
+  }
   local counts = {}
   local total_count = 0
   local selected_state = {}
@@ -74,19 +82,9 @@ local function build_sections(snapshot, selected)
       total_count = total_count + 1
       counts[file.status] = (counts[file.status] or 0) + 1
 
-      if not grouped[file.status] then
-        grouped[file.status] = {
-          kind = file.status,
-          title = section_titles[file.status] or file.status,
-          items = {},
-          selectable_count = 0,
-          selected_count = 0,
-        }
-      end
-
       local selectable = committable_statuses[file.status] == true
       local is_selected = selectable and selected[file.path] == true
-      grouped[file.status].items[#grouped[file.status].items + 1] = {
+      local item = {
         code = file.code,
         path = file.path,
         status = file.status,
@@ -94,19 +92,38 @@ local function build_sections(snapshot, selected)
         selected = is_selected,
       }
 
+      local section = selected_section
+      if not is_selected then
+        if not grouped[file.status] then
+          grouped[file.status] = {
+            kind = file.status,
+            title = section_titles[file.status] or file.status,
+            items = {},
+            selectable_count = 0,
+            selected_count = 0,
+          }
+        end
+        section = grouped[file.status]
+      end
+      section.items[#section.items + 1] = item
+
       if selectable then
         selectable_count = selectable_count + 1
-        grouped[file.status].selectable_count = grouped[file.status].selectable_count + 1
+        section.selectable_count = section.selectable_count + 1
         if is_selected then
           selected_state[file.path] = true
           selected_count = selected_count + 1
-          grouped[file.status].selected_count = grouped[file.status].selected_count + 1
+          selected_section.selected_count = selected_section.selected_count + 1
         end
       end
     end
   end
 
   local sections = {}
+  if #selected_section.items > 0 then
+    sort_items(selected_section.items)
+    sections[#sections + 1] = selected_section
+  end
   for _, section in pairs(grouped) do
     sort_items(section.items)
     sections[#sections + 1] = section
@@ -152,32 +169,12 @@ local function build_view_state(snapshot, opts, previous)
 end
 
 local function update_selection(view_state)
-  local selected = view_state.selected or {}
-  local selected_state = {}
-  local selectable_count = 0
-  local selected_count = 0
-
-  for _, section in ipairs(view_state.sections or {}) do
-    section.selectable_count = 0
-    section.selected_count = 0
-
-    for _, item in ipairs(section.items or {}) do
-      item.selectable = committable_statuses[item.status] == true
-      item.selected = item.selectable and selected[item.path] == true
-
-      if item.selectable then
-        selectable_count = selectable_count + 1
-        section.selectable_count = section.selectable_count + 1
-        if item.selected then
-          selected_state[item.path] = true
-          selected_count = selected_count + 1
-          section.selected_count = section.selected_count + 1
-        end
-      end
-    end
-  end
-
-  view_state.selected = selected_state
+  local sections, counts, total_count, selected, selectable_count, selected_count =
+    build_sections(view_state.status_snapshot, view_state.selected)
+  view_state.sections = sections
+  view_state.counts = counts
+  view_state.total_count = total_count
+  view_state.selected = selected
   view_state.selectable_count = selectable_count
   view_state.selected_count = selected_count
 end

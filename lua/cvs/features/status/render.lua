@@ -130,15 +130,7 @@ function M.lines(view_state)
     for _, section in ipairs(view_state.sections or {}) do
       lines[#lines + 1] = ""
       local section_row = #lines + 1
-      if (section.selectable_count or 0) > 0 then
-        lines[section_row] = ("%s (%d/%d selected)"):format(
-          section.title or "Files",
-          section.selected_count or 0,
-          section.selectable_count
-        )
-      else
-        lines[section_row] = ("%s (%d)"):format(section.title or "Files", #(section.items or {}))
-      end
+      lines[section_row] = ("%s (%d)"):format(section.title or "Files", #(section.items or {}))
       row_map[section_row] = {
         kind = "section",
         section = section,
@@ -147,12 +139,7 @@ function M.lines(view_state)
 
       for _, item in ipairs(section.items or {}) do
         local row = #lines + 1
-        if item.selectable then
-          lines[row] = ("[%s] %s  %s"):format(item.selected and "x" or " ", item.code, item.path)
-          highlight(highlights, row, item.selected and "CvsLabel" or "CvsMuted", 0, 3)
-        else
-          lines[row] = ("    %s  %s"):format(item.code, item.path)
-        end
+        lines[row] = ("    %s  %s"):format(item.code, item.path)
         row_map[row] = {
           kind = "file",
           item = item,
