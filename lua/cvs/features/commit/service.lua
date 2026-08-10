@@ -6,9 +6,15 @@ local events = require("cvs.core.events")
 local queue = require("cvs.core.queue")
 local runner = require("cvs.cvs.runner")
 local state = require("cvs.core.state")
+local types = require("cvs.core.types")
 local util = require("cvs.core.util")
 
 local M = {}
+local committable_statuses = {
+  [types.status.modified] = true,
+  [types.status.added] = true,
+  [types.status.removed] = true,
+}
 
 local function scope_label(workspace, opts)
   if opts.files and #opts.files > 0 then
@@ -59,7 +65,108 @@ local function build_view_state(workspace, opts)
     source_win = opts.source_win,
     message_lines = { "" },
     messages = {},
+    validation = {
+      status = "checking",
+      message = "checking CVS state...",
+    },
   }
+end
+
+local function validation_failure(snapshot, err)
+  if err then
+    return errors.to_string(err)
+  end
+
+  local result = snapshot and snapshot.result
+  if result and result.code ~= 0 then
+    return result.stderr[1] or result.stdout[1] or ("CVS status exited with code %d."):format(result.code)
+  end
+
+  return nil
+end
+
+local function validate_snapshot(snapshot, files, err)
+  local failure = validation_failure(snapshot, err)
+  if failure then
+    return {
+      status = "blocked",
+      message = "blocked - " .. failure,
+    }
+  end
+
+  local statuses = {}
+  local committable_count = 0
+  local has_conflict = false
+  for _, file in ipairs(snapshot and snapshot.files or {}) do
+    statuses[file.path] = file.status
+    if committable_statuses[file.status] then
+      committable_count = committable_count + 1
+    elseif file.status == types.status.conflict then
+      has_conflict = true
+    end
+  end
+
+  if files and #files > 0 then
+    local invalid = {}
+    for _, path in ipairs(files) do
+      if not committable_statuses[statuses[path]] then
+        invalid[#invalid + 1] = path
+      end
+    end
+    if #invalid > 0 then
+      return {
+        status = "blocked",
+        message = "blocked - no longer committable: " .. table.concat(invalid, ", "),
+      }
+    end
+  elseif has_conflict then
+    return {
+      status = "blocked",
+      message = "blocked - resolve CVS conflicts before committing",
+    }
+  elseif committable_count == 0 then
+    return {
+      status = "blocked",
+      message = "blocked - no committable changes found",
+    }
+  end
+
+  return {
+    status = "ready",
+    message = "ready",
+  }
+end
+
+local function set_validation(bufnr, view_state, validation)
+  local attachment = state.get_buffer(bufnr)
+  if not attachment or attachment.kind ~= "commit" or attachment.view_state ~= view_state then
+    return
+  end
+
+  view_state.validation = validation
+  require("cvs.features.commit.buffer").update_validation(bufnr, validation)
+end
+
+local function validate_async(bufnr, view_state)
+  local validation_opts = {
+    force = true,
+    workspace = view_state.workspace,
+  }
+  if #view_state.files == 0 and view_state.opts.path then
+    validation_opts.path = view_state.opts.path
+  end
+
+  local ok, validation_err = pcall(function()
+    require("cvs.features.status.service").collect_async(validation_opts, function(snapshot, err)
+      set_validation(bufnr, view_state, validate_snapshot(snapshot, view_state.files, err))
+    end)
+  end)
+  if not ok then
+    set_validation(bufnr, view_state, {
+      status = "blocked",
+      message = "blocked - " .. tostring(validation_err),
+    })
+  end
 end
 
 function M.open(opts)
@@ -82,7 +189,10 @@ function M.open(opts)
     return nil, err
   end
 
-  return require("cvs.features.commit.buffer").open(build_view_state(workspace, opts), opts)
+  local view_state = build_view_state(workspace, opts)
+  local bufnr, winid = require("cvs.features.commit.buffer").open(view_state, opts)
+  validate_async(bufnr, view_state)
+  return bufnr, winid
 end
 
 local function refresh_source(view_state, callback)
@@ -117,6 +227,17 @@ function M.submit(bufnr)
   local view_state = attachment.view_state
   if view_state.phase == "queued" or view_state.phase == "running" then
     return nil, errors.new("commit_in_progress", "a CVS commit is already in progress for this buffer")
+  end
+
+  local validation = view_state.validation or {}
+  if validation.status ~= "ready" then
+    local message = "CVS state validation is still running"
+    if validation.status == "blocked" then
+      message = validation.message
+    end
+    local err = errors.new("commit_validation_" .. (validation.status or "pending"), message)
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
   end
 
   local message_lines, message = require("cvs.features.commit.buffer").get_message(bufnr)
@@ -208,5 +329,6 @@ function M.submit(bufnr)
 end
 
 M._build_view_state = build_view_state
+M._validate_snapshot = validate_snapshot
 
 return M

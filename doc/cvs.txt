@@ -29,7 +29,10 @@ COMMANDS                                                        *cvs-commands*
         a on an unknown or removed file, visual range, or section heading to
         add or restore the eligible files. Press A on an unknown file, visual
         range, or the Unknown heading to add files in binary mode with -kb.
-        Press cc to open a commit message buffer for the selected files.
+        Press cc to open a commit message buffer immediately for the selected
+        files. Their CVS state is validated in the background while the message
+        is edited. Submission is disabled until validation succeeds. The status
+        view refreshes after the commit completes.
 
         Status queries run asynchronously. The buffer opens immediately with
         a loading message, and refreshes keep the previous snapshot visible

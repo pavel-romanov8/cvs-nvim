@@ -3,6 +3,7 @@ local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
 
 local M = {}
+local validation_prefix = "# Validation: "
 
 local function comment(text)
   return "# " .. text
@@ -51,6 +52,9 @@ local function render_lines(view_state)
   lines[#lines + 1] = comment(("Workspace: %s"):format(view_state.workspace.root_dir))
   lines[#lines + 1] = comment(("Scope: %s"):format(view_state.scope_label))
   lines[#lines + 1] = comment(("Status: %s"):format(view_state.phase))
+  if view_state.validation then
+    lines[#lines + 1] = validation_prefix .. view_state.validation.message
+  end
 
   if view_state.files and #view_state.files > 0 then
     lines[#lines + 1] = comment(("Selected Files (%d):"):format(#view_state.files))
@@ -179,6 +183,22 @@ function M.update(bufnr, view_state)
   state.attach_buffer(bufnr, attachment)
 
   ui_buffer.set_lines(bufnr, render_lines(view_state))
+end
+
+function M.update_validation(bufnr, validation)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  for index, line in ipairs(lines) do
+    if vim.startswith(line, validation_prefix) then
+      vim.api.nvim_buf_set_lines(bufnr, index - 1, index, false, {
+        validation_prefix .. validation.message,
+      })
+      return
+    end
+  end
 end
 
 M._extract_message_lines = extract_message_lines

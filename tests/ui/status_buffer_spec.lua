@@ -247,21 +247,18 @@ return function()
   assert_eq(state.get_buffer(bufnr).view_state.selected["new.lua"], nil, "refresh keeps unselected file clear")
 
   local original_commit_open = commit_service.open
-  local original_commit_refresh = service.refresh
   local commit_opts
   commit_service.open = function(opts)
     commit_opts = opts
     return 999, 998
   end
-  service.refresh = function(_, _, callback)
-    callback(state.get_buffer(bufnr).view_state)
-  end
   selected_heading = find_line(bufnr, "Selected (1)")
   vim.api.nvim_win_set_cursor(winid, { selected_heading, 0 })
   assert_true(vim.api.nvim_get_current_line():find("Selected (1)", 1, true) ~= nil, "commit runs from selected heading")
-  service.commit_selected(bufnr)
-  service.refresh = original_commit_refresh
+  local commit_bufnr, commit_win = service.commit_selected(bufnr)
   commit_service.open = original_commit_open
+  assert_eq(commit_bufnr, 999, "selected commit opens its editor immediately")
+  assert_eq(commit_win, 998, "selected commit returns its editor window")
   assert_eq(#commit_opts.files, 1, "selected commit passes only selected paths")
   assert_eq(commit_opts.files[1], "changed.lua", "selected commit passes selected file")
   assert_eq(commit_opts.workspace.root_dir, temp_dir, "selected commit passes explicit workspace")

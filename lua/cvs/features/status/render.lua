@@ -161,7 +161,7 @@ function M.lines(view_state)
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "- toggles the commit selection"
   highlight(highlights, #lines, "CvsMuted")
-  lines[#lines + 1] = "cc commits the selected files"
+  lines[#lines + 1] = "cc opens a commit message for the selected files"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "a adds or restores files"
   highlight(highlights, #lines, "CvsMuted")

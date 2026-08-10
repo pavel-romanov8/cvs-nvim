@@ -599,54 +599,45 @@ function M.toggle_selection(bufnr, start_row, end_row)
 end
 
 function M.commit_selected(bufnr)
-  local attachment, current_state = get_attachment(bufnr)
+  local attachment, view_state = get_attachment(bufnr)
   if not attachment then
     return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
   end
 
-  if (current_state.selected_count or 0) == 0 then
+  if (view_state.selected_count or 0) == 0 then
     local err = errors.new("commit_files_empty", "select at least one file before committing")
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
     return nil, err
   end
 
-  return M.refresh(bufnr, nil, function(view_state, refresh_err)
-    if not view_state then
-      if refresh_err and refresh_err.kind == "status_refresh_superseded" then
-        util.notify("Commit canceled because a newer status refresh started; press cc again.", vim.log.levels.WARN)
-      end
-      return
+  local files = {}
+  for path, selected in pairs(view_state.selected or {}) do
+    if selected then
+      files[#files + 1] = path
     end
+  end
+  table.sort(files)
 
-    local files = {}
-    for path, selected in pairs(view_state.selected or {}) do
-      if selected then
-        files[#files + 1] = path
-      end
+  if #files == 0 then
+    local err = errors.new("commit_files_empty", "select at least one file before committing")
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
+  end
+
+  local source_win
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    if vim.api.nvim_win_is_valid(winid) then
+      source_win = winid
+      break
     end
-    table.sort(files)
+  end
 
-    if #files == 0 then
-      local err = errors.new("commit_files_empty", "select at least one file before committing")
-      util.notify(errors.to_string(err), vim.log.levels.ERROR)
-      return
-    end
-
-    local source_win
-    for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
-      if vim.api.nvim_win_is_valid(winid) then
-        source_win = winid
-        break
-      end
-    end
-
-    require("cvs.features.commit.service").open({
-      workspace = view_state.workspace,
-      files = files,
-      source_bufnr = bufnr,
-      source_win = source_win,
-    })
-  end)
+  return require("cvs.features.commit.service").open({
+    workspace = view_state.workspace,
+    files = files,
+    source_bufnr = bufnr,
+    source_win = source_win,
+  })
 end
 
 function M.open_current(bufnr, kind)

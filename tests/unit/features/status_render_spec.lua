@@ -90,7 +90,7 @@ return function()
   assert_true(not text:find("example warning", 1, true), "status messages are hidden")
   assert_match(text, "<CR> opens the current file", "help line")
   assert_match(text, "- toggles the commit selection", "selection help line")
-  assert_match(text, "cc commits the selected files", "commit help line")
+  assert_match(text, "cc opens a commit message for the selected files", "commit help line")
   assert_match(text, "A adds unknown files as binary (-kb)", "binary add help line")
 
   local targets = {}
