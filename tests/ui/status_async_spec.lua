@@ -102,11 +102,12 @@ return function()
       code = 124,
       signal = 15,
       stdout = { "M partial.lua" },
-      stderr = {},
+      stderr = { "cvs [update aborted]: received termination signal" },
     })
     assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "failed refresh retains the complete snapshot")
     assert_true(buffer_text(bufnr):find("partial.lua", 1, true) == nil, "failed refresh does not render partial stdout")
     assert_true(buffer_text(bufnr):find("Status unavailable:", 1, true) ~= nil, "failed refresh displays its error")
+    assert_true(buffer_text(bufnr):find("timed out after 10000 ms", 1, true) ~= nil, "timeout explains termination")
 
     config.get().status.cache.enabled = false
     local callbacks = {}

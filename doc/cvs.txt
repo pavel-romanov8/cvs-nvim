@@ -94,6 +94,9 @@ Status snapshots are cached for five minutes by default. The cache can be
 configured through setup():
 >
     require("cvs").setup({
+      cvs = {
+        timeout_ms = 60000,
+      },
       status = {
         cache = {
           enabled = true,
@@ -102,6 +105,9 @@ configured through setup():
       },
     })
 <
+CVS commands time out after 10000 milliseconds by default. Increase
+cvs.timeout_ms for remote or large repositories whose commands take longer.
+
 Set enabled to false to always query CVS. A ttl_ms value of 0 also prevents
 cache reuse. Regardless of these settings, the [!] form of |:Cvs| and R in the
 status view force an immediate refresh.

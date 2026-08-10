@@ -306,12 +306,16 @@ local function status_result_error(result)
     return nil
   end
 
-  local message = result.stderr[1]
-  if not message and result.code == 124 then
-    message = ("CVS status timed out after %d ms."):format(require("cvs.config").get().cvs.timeout_ms)
-  elseif not message and result.signal and result.signal ~= 0 then
+  local message
+  if result.code == 124 then
+    message = ("CVS status timed out after %d ms; increase cvs.timeout_ms for slow repositories.")
+      :format(require("cvs.config").get().cvs.timeout_ms)
+  elseif result.signal and result.signal ~= 0 then
     message = ("CVS status was terminated by signal %d."):format(result.signal)
-  elseif not message then
+  else
+    message = result.stderr[1]
+  end
+  if not message then
     message = ("CVS status exited with code %d."):format(result.code)
   end
   return errors.new("status_failed", message, {
