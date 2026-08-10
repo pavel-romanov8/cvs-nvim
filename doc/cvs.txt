@@ -23,8 +23,9 @@ COMMANDS                                                        *cvs-commands*
         Open the themed CVS status view in a horizontal split. Move to a file
         and press <CR> to open it in the original editing window. Use o, gO, O,
         or p to open it in a horizontal split, vertical split, tab, or preview.
-        Press dd for a full diff against the checked-out revision, or = on a
-        modified file to toggle its inline unified diff. Press - on a file,
+        Press dd for a full side-by-side diff against the checked-out revision,
+        or = on a modified file to toggle streamed unified hunks inline. Press -
+        on a file,
         visual range, or section heading to toggle the commit selection. Press
         a on an unknown or removed file, visual range, or section heading to
         add or restore the eligible files. Press A on an unknown file, visual
@@ -65,15 +66,23 @@ COMMANDS                                                        *cvs-commands*
         path.
 
                                                          *:CvsDiff*
-:CvsDiff [path]
-        Diff the current or provided working file against its checked-out CVS
-        revision in a vertical split.
+:CvsDiff[!] [path]
+        Without [!], open the original full side-by-side diff against the
+        checked-out CVS revision. The working buffer remains editable and
+        includes unsaved changes. With [!], stream a unified CVS diff and show
+        only changed hunks with surrounding context. The streamed view uses the
+        configured diff window kind, which defaults to a tab. Use ]c and [c to
+        move between hunks. Streamed diffs compare the file on disk, so unsaved
+        buffer changes are not included.
 
                                                         *:Cdiffsplit*
-:Cdiffsplit
-        Diff the current working file against its checked-out CVS revision in
-        a vertical split. The working buffer remains editable, including any
-        unsaved changes; the CVS base buffer is read-only.
+:Cdiffsplit[!]
+        Without [!], open the original full side-by-side diff in a vertical
+        split. The working buffer remains editable, including unsaved changes,
+        and the CVS base buffer is read-only. With [!], open streamed unified
+        diff hunks in a read-only vertical split. CVS compares the file on disk
+        for the streamed form, so unsaved changes are not included and are
+        called out in the view.
 
                                                         *:CvsLog*
 :CvsLog [path]
@@ -103,6 +112,10 @@ configured through setup():
           ttl_ms = 300000,
         },
       },
+      diff = {
+        max_bytes = 16777216,
+        max_lines = 100000,
+      },
     })
 <
 CVS commands time out after 60000 milliseconds by default. Increase
@@ -111,6 +124,14 @@ cvs.timeout_ms for remote or large repositories whose commands take longer.
 Set enabled to false to always query CVS. A ttl_ms value of 0 also prevents
 cache reuse. Regardless of these settings, the [!] form of |:Cvs| and R in the
 status view force an immediate refresh.
+
+For |:CvsDiff| and |:Cdiffsplit| with [!], and for status inline diffs, output
+is streamed and only unified hunks are retained. max_bytes bounds raw streamed
+stdout, including CVS headers, and max_lines bounds retained hunk and diagnostic
+lines. Reaching either limit leaves the collected hunks visible and adds a
+truncation notice instead of buffering the remaining output. Set either value
+to 0 to disable that limit. Plain full diffs still load both complete files and
+are not covered by these limits.
 
 ==============================================================================
 vim:tw=78:ts=8:noet:ft=help:norl:

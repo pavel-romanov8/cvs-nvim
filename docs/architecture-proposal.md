@@ -431,7 +431,8 @@ Why:
 Important:
 
 - do not model staging
-- do not build the API around "hunks"
+- do not build repository operations around Git-style hunk staging; read-only
+  diff views may still use unified hunks as a bounded presentation format
 - do not assume rename tracking
 
 ## Conflict Resolution Strategy

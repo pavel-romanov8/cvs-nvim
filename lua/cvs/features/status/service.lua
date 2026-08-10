@@ -14,6 +14,8 @@ local M = {}
 local initialized = false
 local request_serial = 0
 local latest_requests = {}
+local inline_request_serial = 0
+local inline_requests = {}
 
 local status_order = {
   selected = 0,
@@ -867,6 +869,7 @@ function M.toggle_inline_diff(bufnr)
   end
 
   if view_state.inline_diff and view_state.inline_diff.path == item.path then
+    M.cancel_inline_diff(bufnr)
     view_state.inline_diff = nil
     update_view(bufnr, view_state)
     return true
@@ -890,9 +893,25 @@ function M.toggle_inline_diff(bufnr)
   }
   update_view(bufnr, view_state)
 
-  return runner.run(cmd.diff({ path = item.path }), {
-    cwd = view_state.workspace.root_dir,
-  }, function(result)
+  local previous = inline_requests[bufnr]
+  if previous then
+    runner.cancel(previous.process)
+  end
+
+  inline_request_serial = inline_request_serial + 1
+  local request = {
+    id = inline_request_serial,
+  }
+  inline_requests[bufnr] = request
+
+  local process = require("cvs.features.diff.service").collect({
+    path = target,
+  }, function(completed, diff_err)
+    if inline_requests[bufnr] ~= request then
+      return
+    end
+    inline_requests[bufnr] = nil
+
     if not vim.api.nvim_buf_is_valid(bufnr) then
       return
     end
@@ -903,15 +922,30 @@ function M.toggle_inline_diff(bufnr)
       return
     end
 
-    if result.code > 1 then
+    if diff_err then
       current_state.inline_diff = nil
       update_view(bufnr, current_state)
-      local message = result.stderr[1] or result.stdout[1] or ("CVS diff exited with code %d."):format(result.code)
-      util.notify(message, vim.log.levels.ERROR)
+      util.notify(errors.to_string(diff_err), vim.log.levels.ERROR)
       return
     end
 
-    if #result.stdout == 0 then
+    local parsed = completed.parsed or {}
+    local lines = vim.deepcopy(parsed.lines or {})
+    if #lines == 0 and parsed.binary then
+      lines[1] = parsed.messages[1] or "Binary files differ."
+    elseif #lines == 0 and #(parsed.messages or {}) > 0 then
+      vim.list_extend(lines, parsed.messages)
+    end
+    if completed.source_modified then
+      table.insert(lines, 1, "Unsaved buffer changes are not included in this CVS diff.")
+    end
+    if parsed.truncated then
+      lines[#lines + 1] = ("Diff truncated after reaching the configured %s limit."):format(
+        parsed.truncation_reason or "output"
+      )
+    end
+
+    if #lines == 0 then
       current_state.inline_diff = nil
       update_view(bufnr, current_state)
       return
@@ -919,10 +953,24 @@ function M.toggle_inline_diff(bufnr)
 
     current_state.inline_diff = {
       path = item.path,
-      lines = result.stdout,
+      lines = lines,
     }
     update_view(bufnr, current_state)
   end)
+
+  request.process = process
+  return process
+end
+
+function M.cancel_inline_diff(bufnr)
+  local request = inline_requests[bufnr]
+  if not request then
+    return false
+  end
+
+  inline_requests[bufnr] = nil
+  runner.cancel(request.process)
+  return true
 end
 
 local function add_targets(bufnr, start_row, end_row, binary)

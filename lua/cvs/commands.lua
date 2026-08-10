@@ -74,19 +74,26 @@ function M.setup()
   })
 
   create("CvsDiff", function(args)
-    require("cvs").diff(command_opts(args))
+    local opts = command_opts(args)
+    opts.stream = args.bang or nil
+    opts.force = nil
+    require("cvs").diff(opts)
   end, {
+    bang = true,
     nargs = "?",
     complete = "file",
     desc = "Diff a working file against its CVS base revision",
   })
 
-  create("Cdiffsplit", function()
+  create("Cdiffsplit", function(args)
     require("cvs").diff({
       source_bufnr = vim.api.nvim_get_current_buf(),
       source_win = vim.api.nvim_get_current_win(),
+      stream = args.bang or nil,
+      kind = args.bang and "vsplit" or nil,
     })
   end, {
+    bang = true,
     desc = "Diff the current file against its CVS base revision",
   })
 

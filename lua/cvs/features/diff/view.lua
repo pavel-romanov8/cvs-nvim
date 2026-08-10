@@ -1,106 +1,148 @@
+local config = require("cvs.config")
+local state = require("cvs.core.state")
 local ui_buffer = require("cvs.ui.buffer")
+local window = require("cvs.ui.window")
 
 local M = {}
-local active = {}
 
-local function source_window(view_state)
-  local bufnr = view_state.source_bufnr
-  if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-    local winid = view_state.source_win
-    if winid and vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
-      return bufnr, winid
-    end
-
-    for _, candidate in ipairs(vim.fn.win_findbuf(bufnr)) do
-      if vim.api.nvim_win_is_valid(candidate) then
-        return bufnr, candidate
-      end
-    end
-
-    if view_state.source_win then
-      return nil, nil
-    end
-  else
-    bufnr = vim.fn.bufadd(view_state.target_path)
-    vim.fn.bufload(bufnr)
+local function close_buffer(bufnr)
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_buf_delete(bufnr, { force = true })
   end
-
-  vim.cmd(("tab sbuffer %d"):format(bufnr))
-  return bufnr, vim.api.nvim_get_current_win()
 end
 
-local function enable_diff(winid)
-  vim.api.nvim_win_call(winid, function()
-    vim.cmd("diffthis")
-  end)
+local function content(view_state)
+  if view_state.loading then
+    return { "Loading CVS diff..." }
+  end
+
+  if view_state.error then
+    return { "CVS diff failed: " .. view_state.error }
+  end
+
+  local parsed = view_state.parsed or {}
+  local lines = {}
+
+  if view_state.source_modified then
+    lines[#lines + 1] = "Unsaved buffer changes are not included in this CVS diff."
+    lines[#lines + 1] = ""
+  end
+
+  vim.list_extend(lines, parsed.lines or {})
+
+  if not parsed.truncated and (#lines == 0 or (#parsed.lines == 0 and view_state.source_modified and #lines == 2)) then
+    if parsed.binary then
+      lines[#lines + 1] = parsed.messages[1] or "Binary files differ."
+    elseif #(parsed.messages or {}) > 0 then
+      vim.list_extend(lines, parsed.messages)
+    else
+      lines[#lines + 1] = "No changes."
+    end
+  end
+
+  if parsed.truncated then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = ("Diff truncated after reaching the configured %s limit."):format(
+      parsed.truncation_reason or "output"
+    )
+  end
+
+  return lines
 end
 
-function M.open(view_state)
-  local source_bufnr, source_win = source_window(view_state)
-  if not source_win then
-    return nil
-  end
+local function set_content(bufnr, view_state)
+  ui_buffer.set_lines(bufnr, content(view_state))
+  ui_buffer.lock(bufnr)
+end
 
-  local previous = active[source_win]
-  local owns_source_diff = not vim.wo[source_win].diff
-  if previous then
-    owns_source_diff = previous.owns_source_diff
-    active[source_win] = nil
-    if vim.api.nvim_win_is_valid(previous.base_win) then
-      vim.api.nvim_win_close(previous.base_win, true)
-    end
-    if vim.api.nvim_buf_is_valid(previous.base_bufnr) then
-      vim.api.nvim_buf_delete(previous.base_bufnr, { force = true })
-    end
-  end
+local function jump_hunk(direction)
+  local flags = direction > 0 and "W" or "bW"
+  vim.fn.search("^@@", flags)
+end
 
-  local base_bufnr = ui_buffer.create({
-    filetype = vim.bo[source_bufnr].filetype,
+local function attach(bufnr, view_state, old)
+  old = old or {}
+  state.attach_buffer(bufnr, {
+    kind = "diff",
+    target_path = view_state.target_path,
+    revision = view_state.revision,
+    opts = old.opts or view_state.opts or {},
+    process = old.process,
+  })
+end
+
+function M.open(view_state, opts)
+  opts = opts or {}
+
+  local bufnr = ui_buffer.create({
+    filetype = "diff",
   })
   vim.api.nvim_buf_set_name(
-    base_bufnr,
-    ("cvs://base/%s@%s#%d"):format(view_state.target_path, view_state.revision, base_bufnr)
+    bufnr,
+    ("cvs://diff/%s@%s#%d"):format(view_state.target_path, view_state.revision, bufnr)
   )
-  ui_buffer.set_lines(base_bufnr, view_state.result.stdout)
-  vim.bo[base_bufnr].endofline = view_state.result.stdout_ends_with_newline ~= false
-  ui_buffer.lock(base_bufnr)
+  vim.bo[bufnr].undolevels = -1
+  set_content(bufnr, view_state)
 
-  local base_win = vim.api.nvim_win_call(source_win, function()
-    vim.cmd("leftabove vsplit")
-    return vim.api.nvim_get_current_win()
-  end)
-  vim.api.nvim_win_set_buf(base_win, base_bufnr)
+  ui_buffer.set_keymaps(bufnr, {
+    {
+      mode = "n",
+      lhs = "q",
+      rhs = function()
+        close_buffer(bufnr)
+      end,
+      desc = "Close CVS diff",
+    },
+    {
+      mode = "n",
+      lhs = "]c",
+      rhs = function()
+        jump_hunk(1)
+      end,
+      desc = "Go to next CVS diff hunk",
+    },
+    {
+      mode = "n",
+      lhs = "[c",
+      rhs = function()
+        jump_hunk(-1)
+      end,
+      desc = "Go to previous CVS diff hunk",
+    },
+  })
 
-  enable_diff(source_win)
-  enable_diff(base_win)
-  active[source_win] = {
-    base_bufnr = base_bufnr,
-    base_win = base_win,
-    owns_source_diff = owns_source_diff,
-  }
+  local winid = window.open(bufnr, {
+    kind = opts.kind or config.get().ui.diff.kind,
+  })
 
+  attach(bufnr, view_state)
   vim.api.nvim_create_autocmd("BufWipeout", {
-    buffer = base_bufnr,
+    buffer = bufnr,
     once = true,
     callback = function()
-      local current = active[source_win]
-      if not current or current.base_bufnr ~= base_bufnr then
-        return
-      end
-
-      active[source_win] = nil
-      if current.owns_source_diff
-        and vim.api.nvim_win_is_valid(source_win)
-        and vim.api.nvim_win_get_buf(source_win) == source_bufnr
-      then
-        vim.api.nvim_win_call(source_win, function()
-          vim.cmd("diffoff")
-        end)
-      end
+      require("cvs.features.diff.service").cancel(bufnr)
+      state.detach_buffer(bufnr)
     end,
   })
 
-  return base_bufnr, base_win, source_win
+  return bufnr, winid
+end
+
+function M.update(bufnr, view_state)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return nil
+  end
+
+  set_content(bufnr, view_state)
+  attach(bufnr, view_state, state.get_buffer(bufnr))
+  return bufnr
+end
+
+function M.set_process(bufnr, process)
+  local attachment = state.get_buffer(bufnr)
+  if attachment then
+    attachment.process = process
+  end
 end
 
 return M

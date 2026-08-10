@@ -84,31 +84,26 @@ return function()
   assert_eq(vim.fn.maparg("p", "n", false, true).desc, "Open current file in preview", "preview mapping")
   assert_eq(state.get_buffer(bufnr).view_state.selected_count, 0, "selection starts empty")
 
-  local original_run = runner.run
-  local diff_command
-  local diff_cwd
-  runner.run = function(command, opts, callback)
-    diff_command = command
-    diff_cwd = opts.cwd
+  local original_collect = diff_service.collect
+  local diff_path
+  diff_service.collect = function(opts, callback)
+    diff_path = opts.path
     callback({
-      code = 1,
-      stdout = {
-        "--- changed.lua",
-        "+++ changed.lua",
-        "@@ -1 +1 @@",
-        "-old",
-        "+changed",
+      parsed = {
+        lines = {
+          "@@ -1 +1 @@",
+          "-old",
+          "+changed",
+        },
       },
-      stderr = {},
-    })
+    }, nil)
     return { mocked = true }
   end
 
   service.toggle_inline_diff(bufnr)
-  runner.run = original_run
+  diff_service.collect = original_collect
 
-  assert_eq(table.concat(diff_command, " "), "cvs diff -u changed.lua", "inline diff runs CVS diff")
-  assert_eq(diff_cwd, temp_dir, "inline diff runs from the workspace root")
+  assert_eq(diff_path, temp_dir .. "/changed.lua", "inline diff requests the selected file")
   local status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) ~= nil, "inline diff renders its hunk")
   assert_true(status_text:find("   +changed", 1, true) ~= nil, "inline diff renders added lines")
@@ -321,6 +316,7 @@ return function()
     vim.uv.fs_realpath(temp_dir .. "/changed.lua"),
     "dd resolves the current working file"
   )
+  assert_eq(diff_opts.stream, nil, "dd keeps the full side-by-side diff")
 
   local windows_before = #vim.api.nvim_tabpage_list_wins(0)
   service.open_current(bufnr, "split")
@@ -401,6 +397,29 @@ return function()
   added = vim.api.nvim_get_hl(0, { name = "CvsStatusAdded", link = true })
   assert_eq(added.link, "Typedef", "colorscheme changes restore status links")
 
-  vim.api.nvim_win_close(winid, true)
+  status_buffer.update(bufnr, shifted)
+  vim.api.nvim_set_current_win(winid)
+  modified_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
+  local pending_inline
+  local inline_killed = false
+  original_collect = diff_service.collect
+  diff_service.collect = function(_, callback)
+    pending_inline = callback
+    return {
+      kill = function()
+        inline_killed = true
+      end,
+    }
+  end
+  service.toggle_inline_diff(bufnr)
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+  assert_true(inline_killed, "wiping status cancels its inline diff")
+  assert_true(pcall(pending_inline, nil, { kind = "cancelled", message = "cancelled" }), "cancelled inline completion is ignored")
+  diff_service.collect = original_collect
+
+  if vim.api.nvim_win_is_valid(winid) then
+    vim.api.nvim_win_close(winid, true)
+  end
   vim.fn.delete(temp_dir, "rf")
 end

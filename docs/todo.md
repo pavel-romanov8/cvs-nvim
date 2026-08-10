@@ -9,7 +9,8 @@
   - Considered finished for now.
 
 - `:Cdiffsplit` / `:CvsDiff`
-  - Vertical diff against the checked-out CVS revision.
+  - Full side-by-side diff by default; [!] selects the streamed unified hunk
+    view for large files.
   - Considered finished for now.
 
 - `:CvsAnnotate`

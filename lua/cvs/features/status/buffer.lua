@@ -283,6 +283,7 @@ function M.open(view_state, opts)
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = bufnr,
     callback = function()
+      require("cvs.features.status.service").cancel_inline_diff(bufnr)
       state.detach_buffer(bufnr)
     end,
   })

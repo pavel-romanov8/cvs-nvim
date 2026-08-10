@@ -15,6 +15,10 @@ local defaults = {
       ttl_ms = 300000,
     },
   },
+  diff = {
+    max_bytes = 16777216,
+    max_lines = 100000,
+  },
   ui = {
     default_kind = "tab",
     floating = {
