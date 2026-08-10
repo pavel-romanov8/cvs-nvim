@@ -44,6 +44,12 @@ return function()
   local remove_cmd = cmd.remove({ path = "pkg/file.lua" })
   assert_eq(table.concat(remove_cmd, " "), "cvs -f remove -f pkg/file.lua", "remove command includes force flag and path")
 
+  local status_cmd = cmd.status({})
+  assert_eq(table.concat(status_cmd, " "), "cvs -f -nq update", "status command is a read-only update")
+
+  local update_cmd = cmd.update({})
+  assert_eq(table.concat(update_cmd, " "), "cvs -f -q update -d", "update creates repository directories")
+
   local annotate_cmd = cmd.annotate({ path = "pkg/file.lua", revision = "1.7" })
   assert_eq(table.concat(annotate_cmd, " "), "cvs -f annotate -r 1.7 pkg/file.lua", "annotate pins the revision")
 

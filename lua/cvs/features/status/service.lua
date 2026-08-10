@@ -274,8 +274,35 @@ local function wait_for_latest_request(request, callback)
   return true
 end
 
+local function is_missing_directory_advisory(line)
+  return line:match("^cvs%s+update:%s+New directory .+ %-%- ignored%s*$") ~= nil
+    or line:match("^cvs%s+server:%s+New directory .+ %-%- ignored%s*$") ~= nil
+end
+
+local function only_missing_directory_advisories(lines)
+  local found = false
+  for _, line in ipairs(lines or {}) do
+    if vim.trim(line) ~= "" then
+      if not is_missing_directory_advisory(line) then
+        return false
+      end
+      found = true
+    end
+  end
+  return found
+end
+
 local function status_result_error(result)
   if result.code == 0 and (not result.signal or result.signal == 0) then
+    return nil
+  end
+
+  -- Some CVS variants exit 1 when a dry run cannot create a new repository
+  -- directory. Status for the existing working copy is still usable.
+  if result.code == 1
+    and (not result.signal or result.signal == 0)
+    and only_missing_directory_advisories(result.stderr)
+  then
     return nil
   end
 

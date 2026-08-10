@@ -30,7 +30,7 @@ end
 
 function M.update(opts)
   local cmd = base()
-  vim.list_extend(cmd, { "-q", "update" })
+  vim.list_extend(cmd, { "-q", "update", "-d" })
   return add_files(cmd, opts or {})
 end
 

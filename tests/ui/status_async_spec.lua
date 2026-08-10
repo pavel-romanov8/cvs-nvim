@@ -85,6 +85,20 @@ return function()
     pending = nil
     service.refresh(bufnr)
     pending({
+      code = 1,
+      signal = 0,
+      stdout = { "A added.lua" },
+      stderr = { 'cvs update: New directory "_bmad" -- ignored' },
+    })
+    assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "new-directory advisory preserves status")
+    assert_true(
+      buffer_text(bufnr):find("Status unavailable:", 1, true) == nil,
+      "new-directory advisory is not a status failure"
+    )
+
+    pending = nil
+    service.refresh(bufnr)
+    pending({
       code = 124,
       signal = 15,
       stdout = { "M partial.lua" },

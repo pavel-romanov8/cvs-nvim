@@ -48,7 +48,8 @@ COMMANDS                                                        *cvs-commands*
 
                                                         *:CvsUpdate*
 :CvsUpdate [path]
-        Open the scaffolded update workflow.
+        Update the working copy, including repository directories that are
+        missing locally, and open the update result view.
 
                                                          *:CvsAdd*
 :CvsAdd [path]
