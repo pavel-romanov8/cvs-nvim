@@ -12,6 +12,8 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 local initialized = false
+local request_serial = 0
+local latest_requests = {}
 
 local status_order = {
   selected = 0,
@@ -163,6 +165,7 @@ local function build_view_state(snapshot, opts, previous)
     selectable_count = selectable_count,
     selected_count = selected_count,
     messages = vim.deepcopy(previous.messages or snapshot.messages or {}),
+    error = snapshot.error,
     loading = snapshot.loading == true,
     refreshing = previous.refreshing == true,
   }
@@ -199,6 +202,94 @@ local function cache_key(opts)
   end
 
   return table.concat(parts, "|")
+end
+
+local function begin_request(workspace, opts, request)
+  if request then
+    return request
+  end
+
+  request_serial = request_serial + 1
+  local root_dir = uv.fs_realpath(workspace.root_dir) or workspace.root_dir
+  local key = root_dir .. "\0" .. cache_key(opts)
+  request = {
+    id = request_serial,
+    key = key,
+    waiters = {},
+  }
+  latest_requests[key] = request
+  return request
+end
+
+local function is_latest_request(request)
+  return latest_requests[request.key] == request
+end
+
+local function invoke_callbacks(callbacks, snapshot, err)
+  local callback_err
+  for _, callback in ipairs(callbacks) do
+    local ok, current_err = pcall(callback, snapshot, err)
+    if not ok and not callback_err then
+      callback_err = current_err
+    end
+  end
+
+  if callback_err then
+    error(callback_err)
+  end
+end
+
+local function settle_request(request, snapshot, err, callback)
+  request.completed = true
+  request.snapshot = snapshot
+  request.error = err
+
+  local callbacks = {}
+  if callback then
+    callbacks[#callbacks + 1] = callback
+  end
+  vim.list_extend(callbacks, request.waiters)
+  request.waiters = {}
+  invoke_callbacks(callbacks, snapshot, err)
+end
+
+local function deliver_request(request, callback, snapshot, err)
+  settle_request(request, snapshot, err, callback)
+end
+
+local function wait_for_latest_request(request, callback)
+  local latest = latest_requests[request.key]
+  if not latest or latest == request then
+    return false
+  end
+
+  local waiters = request.waiters
+  request.waiters = {}
+  waiters[#waiters + 1] = callback
+  if latest.completed then
+    invoke_callbacks(waiters, latest.snapshot, latest.error)
+  else
+    vim.list_extend(latest.waiters, waiters)
+  end
+  return true
+end
+
+local function status_result_error(result)
+  if result.code == 0 and (not result.signal or result.signal == 0) then
+    return nil
+  end
+
+  local message = result.stderr[1]
+  if not message and result.code == 124 then
+    message = ("CVS status timed out after %d ms."):format(require("cvs.config").get().cvs.timeout_ms)
+  elseif not message and result.signal and result.signal ~= 0 then
+    message = ("CVS status was terminated by signal %d."):format(result.signal)
+  elseif not message then
+    message = ("CVS status exited with code %d."):format(result.code)
+  end
+  return errors.new("status_failed", message, {
+    result = result,
+  })
 end
 
 local function cached_snapshot(workspace, opts)
@@ -346,6 +437,7 @@ function M.collect(opts)
   if not workspace then
     return nil, err
   end
+  local request = begin_request(workspace, opts)
 
   local cache_config = require("cvs.config").get().status.cache
   if opts.force then
@@ -356,11 +448,14 @@ function M.collect(opts)
 
   local cached = cached_snapshot(workspace, opts)
   if cached then
-    state.set_snapshot(workspace.root_dir, cached)
-    events.emit("CvsStatusRefreshed", {
-      root_dir = workspace.root_dir,
-      cached = true,
-    })
+    if is_latest_request(request) then
+      state.set_snapshot(workspace.root_dir, cached)
+      events.emit("CvsStatusRefreshed", {
+        root_dir = workspace.root_dir,
+        cached = true,
+      })
+    end
+    settle_request(request, cached)
     return cached
   end
 
@@ -374,21 +469,33 @@ function M.collect(opts)
 
   local caps = capabilities.detect()
   if not caps.executable then
-    snapshot.messages[#snapshot.messages + 1] = ("CVS executable is not available: %s"):format(caps.bin)
-  else
-    snapshot.result = runner.run(cmd.status(opts), {
-      cwd = workspace.root_dir,
-    })
-
-    local parsed = parse.parse(snapshot.result.stdout)
-    snapshot.files = parsed.files
-    snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
+    err = errors.new("cvs_missing", ("CVS executable is not available: %s"):format(caps.bin))
+    settle_request(request, nil, err)
+    return nil, err
   end
 
-  return finish_collection(snapshot, opts)
+  snapshot.result = runner.run(cmd.status(opts), {
+    cwd = workspace.root_dir,
+  })
+
+  local result_err = status_result_error(snapshot.result)
+  if result_err then
+    settle_request(request, nil, result_err)
+    return nil, result_err
+  end
+
+  local parsed = parse.parse(snapshot.result.stdout)
+  snapshot.files = parsed.files
+  snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
+
+  if is_latest_request(request) then
+    finish_collection(snapshot, opts)
+  end
+  settle_request(request, snapshot)
+  return snapshot
 end
 
-function M.collect_async(opts, callback)
+function M.collect_async(opts, callback, request)
   opts = opts or {}
   callback = callback or function() end
 
@@ -401,6 +508,7 @@ function M.collect_async(opts, callback)
     callback(nil, err)
     return nil
   end
+  request = begin_request(workspace, opts, request)
   local cache_config = require("cvs.config").get().status.cache
   if opts.force then
     state.invalidate_status_cache(workspace.root_dir)
@@ -411,12 +519,14 @@ function M.collect_async(opts, callback)
 
   local cached = cached_snapshot(workspace, opts)
   if cached then
-    state.set_snapshot(workspace.root_dir, cached)
-    events.emit("CvsStatusRefreshed", {
-      root_dir = workspace.root_dir,
-      cached = true,
-    })
-    callback(cached)
+    if is_latest_request(request) then
+      state.set_snapshot(workspace.root_dir, cached)
+      events.emit("CvsStatusRefreshed", {
+        root_dir = workspace.root_dir,
+        cached = true,
+      })
+    end
+    deliver_request(request, callback, cached)
     return nil
   end
 
@@ -430,8 +540,12 @@ function M.collect_async(opts, callback)
 
   local caps = capabilities.detect()
   if not caps.executable then
-    snapshot.messages[#snapshot.messages + 1] = ("CVS executable is not available: %s"):format(caps.bin)
-    callback(finish_collection(snapshot, opts))
+    deliver_request(
+      request,
+      callback,
+      nil,
+      errors.new("cvs_missing", ("CVS executable is not available: %s"):format(caps.bin))
+    )
     return nil
   end
 
@@ -439,18 +553,31 @@ function M.collect_async(opts, callback)
     cwd = workspace.root_dir,
   }, function(result)
     if state.get_status_cache_generation(workspace.root_dir) ~= cache_generation then
+      if wait_for_latest_request(request, callback) then
+        return
+      end
+
       local retry_opts = vim.tbl_extend("force", {}, opts, {
         force = false,
       })
-      M.collect_async(retry_opts, callback)
+      M.collect_async(retry_opts, callback, request)
       return
     end
 
     snapshot.result = result
+    local result_err = status_result_error(result)
+    if result_err then
+      deliver_request(request, callback, nil, result_err)
+      return
+    end
+
     local parsed = parse.parse(result.stdout)
     snapshot.files = parsed.files
     snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
-    callback(finish_collection(snapshot, opts))
+    if is_latest_request(request) then
+      finish_collection(snapshot, opts)
+    end
+    deliver_request(request, callback, snapshot)
   end)
 end
 
@@ -500,6 +627,11 @@ function M.open(opts)
       return
     end
     if not snapshot then
+      local failed_snapshot = vim.tbl_extend("force", {}, loading_snapshot, {
+        loading = false,
+        error = errors.to_string(collect_err),
+      })
+      update_view(bufnr, build_view_state(failed_snapshot, opts))
       util.notify(errors.to_string(collect_err), vim.log.levels.ERROR)
       return
     end
@@ -523,6 +655,7 @@ function M.refresh(bufnr, extra, callback)
   state.attach_buffer(bufnr, attachment)
 
   view_state.refreshing = true
+  view_state.error = nil
   update_view(bufnr, view_state)
 
   local collect_opts = vim.tbl_extend("force", {}, view_state.opts, {
@@ -548,6 +681,7 @@ function M.refresh(bufnr, extra, callback)
 
     if not snapshot then
       current_state.refreshing = false
+      current_state.error = errors.to_string(err)
       update_view(bufnr, current_state)
       util.notify(errors.to_string(err), vim.log.levels.ERROR)
       if callback then

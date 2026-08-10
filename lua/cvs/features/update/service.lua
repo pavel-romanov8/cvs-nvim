@@ -36,8 +36,8 @@ end
 
 local function refresh_status(opts, callback)
   local refresh_opts = vim.tbl_extend("force", {}, opts or {}, { force = true })
-  return require("cvs.features.status.service").collect_async(refresh_opts, function(result)
-    callback(result)
+  return require("cvs.features.status.service").collect_async(refresh_opts, function(result, err)
+    callback(result, err)
   end)
 end
 
@@ -97,10 +97,13 @@ function M.run(opts)
       end
 
       local parsed = parsed_or_err
-      local function complete(status_snapshot)
+      local function complete(status_snapshot, status_err)
         local callback_ok, callback_err = pcall(function()
           local final_state = complete_state(view_state, result, parsed)
           final_state.status_snapshot = status_snapshot
+          if status_err then
+            final_state.messages[#final_state.messages + 1] = "Status refresh failed: " .. errors.to_string(status_err)
+          end
 
           require("cvs.features.update.buffer").update(bufnr, final_state)
 
@@ -136,7 +139,7 @@ function M.run(opts)
       local refresh_ok, refresh_err = pcall(refresh_status, opts, complete)
       if not refresh_ok then
         util.notify(("CVS status refresh failed internally: %s"):format(refresh_err), vim.log.levels.ERROR)
-        complete(nil)
+        complete(nil, refresh_err)
       end
     end)
   end, function(queue_err)

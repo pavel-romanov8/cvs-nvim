@@ -42,8 +42,8 @@ local function refresh_status(workspace, opts, callback)
     force = true,
     workspace = workspace,
   })
-  return require("cvs.features.status.service").collect_async(refresh_opts, function(result)
-    callback(result)
+  return require("cvs.features.status.service").collect_async(refresh_opts, function(result, err)
+    callback(result, err)
   end)
 end
 
@@ -270,10 +270,13 @@ function M.submit(bufnr)
     runner.run(command, {
       cwd = view_state.workspace.root_dir,
     }, function(result)
-      local function complete(status_snapshot)
+      local function complete(status_snapshot, status_err)
         local ok, callback_err = pcall(function()
           local messages = vim.deepcopy(result.stdout)
           vim.list_extend(messages, result.stderr)
+          if status_err then
+            messages[#messages + 1] = "Status refresh failed: " .. errors.to_string(status_err)
+          end
 
           view_state.phase = "done"
           view_state.result = result
@@ -318,7 +321,7 @@ function M.submit(bufnr)
       local ok, refresh_err = pcall(refresh_source, view_state, complete)
       if not ok then
         util.notify(("CVS status refresh failed internally: %s"):format(refresh_err), vim.log.levels.ERROR)
-        complete(nil)
+        complete(nil, refresh_err)
       end
     end)
   end, function(queue_err)

@@ -115,11 +115,17 @@ function M.lines(view_state)
   )
   highlight_label(highlights, #lines, lines[#lines])
 
+  if view_state.error then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Status unavailable: " .. view_state.error
+    highlight(highlights, #lines, "ErrorMsg")
+  end
+
   if view_state.loading then
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Loading CVS status..."
     highlight(highlights, #lines, "CvsMuted")
-  elseif (view_state.total_count or 0) == 0 then
+  elseif (view_state.total_count or 0) == 0 and not view_state.error then
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Working copy is clean for this scope."
     highlight(highlights, #lines, "CvsMuted")

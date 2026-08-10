@@ -112,4 +112,13 @@ return function()
   assert_true(groups.DiffChange, "inline diff hunk highlight")
   assert_true(groups.DiffDelete, "inline diff deletion highlight")
   assert_true(groups.DiffAdd, "inline diff addition highlight")
+
+  local error_lines = render.lines({
+    workspace = { root_dir = "/tmp/example" },
+    scope_label = "workspace",
+    error = "status_failed: CVS status exited with code 124.",
+  })
+  local error_text = table.concat(error_lines, "\n")
+  assert_match(error_text, "Status unavailable: status_failed", "status failure")
+  assert_true(not error_text:find("Working copy is clean", 1, true), "failed status is not reported as clean")
 end
