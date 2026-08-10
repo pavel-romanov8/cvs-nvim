@@ -4,7 +4,7 @@ local defaults = {
   cvs = {
     bin = "cvs",
     global_args = {},
-    timeout_ms = 10000,
+    timeout_ms = 60000,
   },
   notifications = {
     enabled = true,

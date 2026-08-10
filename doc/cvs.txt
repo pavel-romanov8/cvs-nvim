@@ -105,7 +105,7 @@ configured through setup():
       },
     })
 <
-CVS commands time out after 10000 milliseconds by default. Increase
+CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.
 
 Set enabled to false to always query CVS. A ttl_ms value of 0 also prevents

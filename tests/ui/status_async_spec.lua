@@ -107,7 +107,7 @@ return function()
     assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "failed refresh retains the complete snapshot")
     assert_true(buffer_text(bufnr):find("partial.lua", 1, true) == nil, "failed refresh does not render partial stdout")
     assert_true(buffer_text(bufnr):find("Status unavailable:", 1, true) ~= nil, "failed refresh displays its error")
-    assert_true(buffer_text(bufnr):find("timed out after 10000 ms", 1, true) ~= nil, "timeout explains termination")
+    assert_true(buffer_text(bufnr):find("timed out after 60000 ms", 1, true) ~= nil, "timeout explains termination")
 
     config.get().status.cache.enabled = false
     local callbacks = {}
