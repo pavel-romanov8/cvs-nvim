@@ -1084,38 +1084,50 @@ function M.remove_current(bufnr)
     return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
   end
 
-  local item = require("cvs.features.status.buffer").get_current_item(bufnr)
-  if not item then
+  local status_buffer = require("cvs.features.status.buffer")
+  local targets, skipped = status_buffer.get_remove_targets(bufnr)
+
+  if #targets == 0 then
+    local item = status_buffer.get_current_item(bufnr)
+    if not item then
+      util.notify("No files in this section can be scheduled for removal.", vim.log.levels.WARN)
+    elseif item.status == types.status.unknown then
+      util.notify("Use your own file deletion flow for unknown files.", vim.log.levels.WARN)
+    elseif item.status == types.status.removed then
+      util.notify("This file is already scheduled for removal.", vim.log.levels.INFO)
+    else
+      util.notify("Update the workspace before removing incoming files.", vim.log.levels.WARN)
+    end
+
     return nil
   end
 
-  if item.status == types.status.unknown then
-    util.notify("Use your own file deletion flow for unknown files.", vim.log.levels.WARN)
-    return nil
+  if skipped > 0 then
+    local suffix = skipped == 1 and "" or "s"
+    util.notify(("Skipped %d file%s that cannot be removed."):format(skipped, suffix), vim.log.levels.WARN)
   end
 
-  if item.status == types.status.removed then
-    util.notify("This file is already scheduled for removal.", vim.log.levels.INFO)
-    return nil
+  local files = {}
+  for _, item in ipairs(targets) do
+    files[#files + 1] = item.path
   end
-
-  if item.status == types.status.updated or item.status == types.status.patched then
-    util.notify("Update the workspace before removing incoming files.", vim.log.levels.WARN)
-    return nil
-  end
-
-  local target = resolve_target_path(view_state.workspace, item.path)
 
   return require("cvs.features.files.service").remove({
-    path = target,
+    workspace = view_state.workspace,
+    files = files,
     on_complete = function(result)
       if not vim.api.nvim_buf_is_valid(bufnr) then
         return
       end
 
-      local message = result.code == 0
-        and ("Scheduled %s for removal."):format(item.path)
-        or (result.stderr[1] or result.stdout[1] or ("CVS remove exited with code %d."):format(result.code))
+      local message
+      if result.code == 0 and #targets == 1 then
+        message = ("Scheduled %s for removal."):format(targets[1].path)
+      elseif result.code == 0 then
+        message = ("Scheduled %d files for removal."):format(#targets)
+      else
+        message = result.stderr[1] or result.stdout[1] or ("CVS remove exited with code %d."):format(result.code)
+      end
 
       M.refresh(bufnr, {
         messages = { message },

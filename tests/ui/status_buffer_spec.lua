@@ -144,6 +144,71 @@ return function()
   status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
 
+  local missing_state = service._build_view_state({
+    workspace = view_state.workspace,
+    generated_at = view_state.generated_at,
+    files = {
+      { code = "M", path = "changed.lua", status = "modified" },
+      { code = "A", path = "new.lua", status = "added" },
+      { code = "R", path = "missing-one.lua", status = "missing" },
+      { code = "R", path = "missing-two.lua", status = "missing" },
+      { code = "?", path = "unknown-one.lua", status = "unknown" },
+      { code = "?", path = "unknown-two.lua", status = "unknown" },
+      { code = "?", path = "unknown-three.lua", status = "unknown" },
+    },
+    messages = {},
+  }, {}, state.get_buffer(bufnr).view_state)
+  status_buffer.update(bufnr, missing_state)
+  local missing_heading = find_line(bufnr, "Missing (2)")
+  local missing_targets = status_buffer.get_remove_targets(bufnr, missing_heading)
+  assert_eq(#missing_targets, 2, "remove resolves every missing file from its heading")
+
+  local original_remove = files_service.remove
+  local original_remove_collect = service.collect_async
+  local remove_opts
+  files_service.remove = function(opts)
+    remove_opts = opts
+    opts.on_complete({ code = 0, stdout = {}, stderr = {} })
+    return { "cvs", "remove" }
+  end
+  service.collect_async = function(_, callback)
+    callback({
+      workspace = view_state.workspace,
+      generated_at = view_state.generated_at,
+      files = {
+        { code = "M", path = "changed.lua", status = "modified" },
+        { code = "A", path = "new.lua", status = "added" },
+        { code = "R", path = "missing-one.lua", status = "removed" },
+        { code = "R", path = "missing-two.lua", status = "removed" },
+        { code = "?", path = "unknown-one.lua", status = "unknown" },
+        { code = "?", path = "unknown-two.lua", status = "unknown" },
+        { code = "?", path = "unknown-three.lua", status = "unknown" },
+      },
+      messages = {},
+    })
+  end
+  vim.api.nvim_win_set_cursor(winid, { missing_heading, 0 })
+  service.remove_current(bufnr)
+  assert_eq(remove_opts.workspace.root_dir, temp_dir, "heading remove uses status workspace")
+  assert_eq(#remove_opts.files, 2, "heading remove passes every missing file")
+  assert_eq(remove_opts.files[1], "missing-one.lua", "heading remove includes first missing file")
+  assert_eq(remove_opts.files[2], "missing-two.lua", "heading remove includes second missing file")
+  assert_true(find_line(bufnr, "Removed (2)") ~= nil, "successful heading remove refreshes files as removed")
+  files_service.remove = original_remove
+  service.collect_async = original_remove_collect
+  status_buffer.update(bufnr, service._build_view_state({
+    workspace = view_state.workspace,
+    generated_at = view_state.generated_at,
+    files = {
+      { code = "M", path = "changed.lua", status = "modified" },
+      { code = "A", path = "new.lua", status = "added" },
+      { code = "?", path = "unknown-one.lua", status = "unknown" },
+      { code = "?", path = "unknown-two.lua", status = "unknown" },
+      { code = "?", path = "unknown-three.lua", status = "unknown" },
+    },
+    messages = {},
+  }, {}, state.get_buffer(bufnr).view_state))
+
   local original_add = files_service.add
   local original_add_collect = service.collect_async
   local add_result = { code = 1, stdout = {}, stderr = { "add failed" } }

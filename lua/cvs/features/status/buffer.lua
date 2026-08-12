@@ -115,6 +115,15 @@ function M.get_binary_add_targets(bufnr, start_row, end_row)
   end)
 end
 
+function M.get_remove_targets(bufnr, start_row, end_row)
+  return collect_targets(bufnr, start_row, end_row, function(item)
+    return item.status ~= "unknown"
+      and item.status ~= "removed"
+      and item.status ~= "updated"
+      and item.status ~= "patched"
+  end)
+end
+
 function M.open(view_state, opts)
   opts = opts or {}
   local origin_win = vim.api.nvim_get_current_win()
