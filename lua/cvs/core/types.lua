@@ -3,6 +3,7 @@ local M = {}
 M.status = {
   modified = "modified",
   added = "added",
+  missing = "missing",
   removed = "removed",
   conflict = "conflict",
   patched = "patched",

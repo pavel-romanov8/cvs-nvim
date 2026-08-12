@@ -14,6 +14,7 @@ local section_titles = {
 
 local detail_labels = {
   added = "added to CVS; ready to commit",
+  missing = "missing locally; press r to schedule removal",
   removed = "scheduled for removal",
   conflict = "resolve the conflict before committing",
   unknown = "press a to add this file",

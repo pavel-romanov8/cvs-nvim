@@ -1,6 +1,7 @@
 local capabilities = require("cvs.cvs.capabilities")
 local cmd = require("cvs.cvs.cmd")
 local context = require("cvs.cvs.context")
+local entries = require("cvs.cvs.entries")
 local errors = require("cvs.core.errors")
 local events = require("cvs.core.events")
 local parse = require("cvs.features.status.parse")
@@ -21,16 +22,18 @@ local status_order = {
   selected = 0,
   [types.status.modified] = 1,
   [types.status.added] = 2,
-  [types.status.removed] = 3,
-  [types.status.unknown] = 4,
-  [types.status.conflict] = 5,
-  [types.status.updated] = 6,
-  [types.status.patched] = 7,
+  [types.status.missing] = 3,
+  [types.status.removed] = 4,
+  [types.status.unknown] = 5,
+  [types.status.conflict] = 6,
+  [types.status.updated] = 7,
+  [types.status.patched] = 8,
 }
 
 local section_titles = {
   [types.status.modified] = "Modified",
   [types.status.added] = "Added",
+  [types.status.missing] = "Missing",
   [types.status.removed] = "Removed",
   [types.status.unknown] = "Unknown",
   [types.status.conflict] = "Conflicts",
@@ -413,6 +416,20 @@ local function resolve_target_path(workspace, path)
   return util.path_join(workspace.root_dir, path)
 end
 
+local function reconcile_working_copy(files, workspace)
+  for _, file in ipairs(files or {}) do
+    if file.status == types.status.updated then
+      local target = resolve_target_path(workspace, file.path)
+      if uv.fs_lstat(target) == nil and entries.working_revision(target) then
+        file.code = "!"
+        file.status = types.status.missing
+      end
+    end
+  end
+
+  return files
+end
+
 local function usable_target_window(winid, status_bufnr)
   if not winid or not vim.api.nvim_win_is_valid(winid) then
     return false
@@ -518,7 +535,7 @@ function M.collect(opts)
   end
 
   local parsed = parse.parse(snapshot.result.stdout)
-  snapshot.files = parsed.files
+  snapshot.files = reconcile_working_copy(parsed.files, workspace)
   snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
 
   if is_latest_request(request) then
@@ -605,7 +622,7 @@ function M.collect_async(opts, callback, request)
     end
 
     local parsed = parse.parse(result.stdout)
-    snapshot.files = parsed.files
+    snapshot.files = reconcile_working_copy(parsed.files, workspace)
     snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
     if is_latest_request(request) then
       finish_collection(snapshot, opts)
@@ -1110,5 +1127,6 @@ end
 
 M._build_view_state = build_view_state
 M._cache_key = cache_key
+M._reconcile_working_copy = reconcile_working_copy
 
 return M

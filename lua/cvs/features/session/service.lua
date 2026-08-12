@@ -12,11 +12,12 @@ local M = {}
 local status_order = {
   [types.status.modified] = 1,
   [types.status.added] = 2,
-  [types.status.removed] = 3,
-  [types.status.unknown] = 4,
-  [types.status.conflict] = 5,
-  [types.status.updated] = 6,
-  [types.status.patched] = 7,
+  [types.status.missing] = 3,
+  [types.status.removed] = 4,
+  [types.status.unknown] = 5,
+  [types.status.conflict] = 6,
+  [types.status.updated] = 7,
+  [types.status.patched] = 8,
 }
 
 local function scope_label(workspace, opts)
@@ -72,7 +73,10 @@ local function classify_file(file, selected)
     else
       item.selected = selected[file.path] == true
     end
-  elseif file.status == types.status.unknown or file.status == types.status.conflict then
+  elseif file.status == types.status.missing
+    or file.status == types.status.unknown
+    or file.status == types.status.conflict
+  then
     item.section = "attention"
   elseif file.status == types.status.updated or file.status == types.status.patched then
     item.section = "incoming"

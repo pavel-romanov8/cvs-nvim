@@ -73,4 +73,33 @@ return function()
   assert_eq(selected_section.items[1].path, "lua/cvs/init.lua", "selected section contains the selected file")
   assert_eq(selected.sections[1].kind, "selected", "selected section is rendered first")
   assert_eq(find_section(selected, "modified"), nil, "selected files leave their status section")
+
+  local temp_dir = vim.fn.tempname()
+  vim.fn.mkdir(temp_dir .. "/CVS", "p")
+  vim.fn.writefile({
+    "/tracked.lua/1.7/Thu Jan 01 00:00:00 2026//",
+    "/present.lua/1.4/Thu Jan 01 00:00:00 2026//",
+  }, temp_dir .. "/CVS/Entries")
+  vim.fn.writefile({ "content" }, temp_dir .. "/present.lua")
+  local reconciled = service._reconcile_working_copy({
+    { code = "U", path = "tracked.lua", status = "updated" },
+    { code = "U", path = "present.lua", status = "updated" },
+    { code = "U", path = "incoming.lua", status = "updated" },
+  }, {
+    root_dir = temp_dir,
+  })
+  assert_eq(reconciled[1].code, "!", "missing tracked file gets a distinct status code")
+  assert_eq(reconciled[1].status, "missing", "missing tracked file is not treated as incoming")
+  assert_eq(reconciled[2].status, "updated", "present tracked file remains incoming")
+  assert_eq(reconciled[3].status, "updated", "untracked incoming file remains incoming")
+
+  local missing_view = service._build_view_state({
+    workspace = { root_dir = temp_dir },
+    files = reconciled,
+  }, {}, {})
+  local missing = find_section(missing_view, "missing")
+  assert_eq(#missing.items, 1, "missing tracked file is visible")
+  assert_eq(missing.items[1].selectable, false, "missing file must be scheduled before commit")
+  assert_eq(missing_view.total_count, 1, "incoming file remains hidden from status")
+  vim.fn.delete(temp_dir, "rf")
 end

@@ -10,6 +10,7 @@ local links = {
   CvsPath = "Directory",
   CvsStatusModified = "Structure",
   CvsStatusAdded = "Typedef",
+  CvsStatusMissing = "WarningMsg",
   CvsStatusRemoved = "Typedef",
   CvsStatusUnknown = "StorageClass",
   CvsStatusConflict = "Structure",

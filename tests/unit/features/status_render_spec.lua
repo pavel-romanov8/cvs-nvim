@@ -20,12 +20,13 @@ return function()
     scope_label = "workspace",
     generated_at = "2026-03-27 12:00:00",
     cached = true,
-    total_count = 4,
+    total_count = 5,
     selectable_count = 2,
     selected_count = 1,
     counts = {
       modified = 1,
       added = 1,
+      missing = 1,
       removed = 1,
       unknown = 1,
     },
@@ -46,6 +47,13 @@ return function()
         selected_count = 0,
         items = {
           { code = "M", path = "lua/cvs/init.lua", status = "modified", selectable = true, selected = false },
+        },
+      },
+      {
+        kind = "missing",
+        title = "Missing",
+        items = {
+          { code = "!", path = "lua/cvs/missing.lua", status = "missing", selectable = false, selected = false },
         },
       },
       {
@@ -72,14 +80,16 @@ return function()
   local text = table.concat(lines, "\n")
   assert_match(text, "CVS", "header")
   assert_match(text, "Root: /tmp/example", "root line")
-  assert_match(text, "Files: 4", "file count")
+  assert_match(text, "Files: 5", "file count")
   assert_match(text, "Commit selection: 1/2", "commit selection count")
   assert_match(text, "Snapshot: 2026-03-27 12:00:00 (cached)", "cached snapshot marker")
-  assert_match(text, "M: 1, A: 1, R: 1, ?: 1", "summary counts")
+  assert_match(text, "M: 1, A: 1, !: 1, R: 1, ?: 1", "summary counts")
   assert_match(text, "Selected (1)", "selected section")
   assert_match(text, "Modified (1)", "modified section")
+  assert_match(text, "Missing (1)", "missing section")
   assert_match(text, "    M  lua/cvs/init.lua", "unselected file line")
   assert_match(text, "    A  lua/cvs/new.lua", "selected file line")
+  assert_match(text, "    !  lua/cvs/missing.lua", "missing file line")
   assert_true(not text:find("[ ]", 1, true), "unselected files do not use checkboxes")
   assert_true(not text:find("[x]", 1, true), "selected files do not use checkboxes")
   assert_match(text, "    ?  notes.txt", "non-selectable file line")
@@ -98,8 +108,8 @@ return function()
     targets[target.kind] = targets[target.kind] or {}
     targets[target.kind][#targets[target.kind] + 1] = { row = row, target = target }
   end
-  assert_true(#targets.section == 3, "section rows are semantic targets")
-  assert_true(#targets.file == 6, "file and inline diff rows are semantic targets")
+  assert_true(#targets.section == 4, "section rows are semantic targets")
+  assert_true(#targets.file == 7, "file and inline diff rows are semantic targets")
 
   local groups = {}
   for _, highlight in ipairs(highlights) do
@@ -109,6 +119,7 @@ return function()
   assert_true(groups.CvsSection, "section highlight")
   assert_true(groups.CvsStatusModified, "modified file highlight")
   assert_true(groups.CvsStatusAdded, "added file highlight")
+  assert_true(groups.CvsStatusMissing, "missing file highlight")
   assert_true(groups.DiffChange, "inline diff hunk highlight")
   assert_true(groups.DiffDelete, "inline diff deletion highlight")
   assert_true(groups.DiffAdd, "inline diff addition highlight")

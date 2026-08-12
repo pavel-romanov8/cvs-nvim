@@ -35,6 +35,10 @@ COMMANDS                                                        *cvs-commands*
         is edited. Submission is disabled until validation succeeds. The status
         view refreshes after the commit completes.
 
+        Tracked files deleted from the working copy appear in the Missing
+        section. Press r on a missing file to schedule its removal in CVS; it
+        then becomes selectable for commit in the Removed section.
+
         Status queries run asynchronously. The buffer opens immediately with
         a loading message, and refreshes keep the previous snapshot visible
         while CVS runs. Refreshes preserve the file under the cursor when it

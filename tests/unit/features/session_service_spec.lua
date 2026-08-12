@@ -26,6 +26,7 @@ return function()
       { code = "M", path = "lua/cvs/init.lua", status = "modified" },
       { code = "A", path = "lua/cvs/new.lua", status = "added" },
       { code = "R", path = "lua/cvs/old.lua", status = "removed" },
+      { code = "!", path = "lua/cvs/missing.lua", status = "missing" },
       { code = "?", path = "notes.txt", status = "unknown" },
       { code = "C", path = "plugin/cvs.lua", status = "conflict" },
       { code = "U", path = "README.md", status = "updated" },
@@ -43,7 +44,7 @@ return function()
   local attention = find_section(initial, "attention")
   local incoming = find_section(initial, "incoming")
   assert_eq(#outgoing.items, 3, "outgoing section item count")
-  assert_eq(#attention.items, 2, "attention section item count")
+  assert_eq(#attention.items, 3, "attention section item count")
   assert_eq(#incoming.items, 1, "incoming section item count")
 
   local next = service._build_view_state(snapshot, {}, {

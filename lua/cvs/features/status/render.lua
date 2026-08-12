@@ -3,6 +3,7 @@ local M = {}
 local status_order = {
   "modified",
   "added",
+  "missing",
   "removed",
   "unknown",
   "conflict",
@@ -13,6 +14,7 @@ local status_order = {
 local summary_codes = {
   modified = "M",
   added = "A",
+  missing = "!",
   removed = "R",
   unknown = "?",
   conflict = "C",
@@ -23,6 +25,7 @@ local summary_codes = {
 local status_highlights = {
   modified = "CvsStatusModified",
   added = "CvsStatusAdded",
+  missing = "CvsStatusMissing",
   removed = "CvsStatusRemoved",
   unknown = "CvsStatusUnknown",
   conflict = "CvsStatusConflict",
