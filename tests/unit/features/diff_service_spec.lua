@@ -83,13 +83,15 @@ return function()
   local opened_process, diff_bufnr = service.open({ path = target, kind = "vsplit", stream = true })
   assert_eq(opened_process ~= nil, true, "public diff API returns its process first")
   vim.api.nvim_buf_delete(diff_bufnr, { force = true })
-  assert_eq(killed, true, "wiping a loading diff cancels its process")
   local cancelled_ok = pcall(pending_complete, {
     code = 124,
     signal = 15,
     stderr = { "cancelled" },
   })
-  assert_eq(cancelled_ok, true, "cancelled completion is ignored")
+  assert_eq(cancelled_ok, true, "completion racing with window cleanup is ignored")
+  assert_eq(vim.wait(1000, function()
+    return killed
+  end, 10), true, "wiping a loading diff cancels its process")
   runner.stream = original_stream
   vim.api.nvim_buf_delete(source_bufnr, { force = true })
 

@@ -13,6 +13,7 @@ local tests = {
   "tests/unit/features/commit_service_spec.lua",
   "tests/unit/features/diff_service_spec.lua",
   "tests/unit/features/diff_parse_spec.lua",
+  "tests/unit/features/diff_sides_spec.lua",
   "tests/unit/features/files_service_spec.lua",
   "tests/unit/features/status_render_spec.lua",
   "tests/unit/features/status_service_spec.lua",

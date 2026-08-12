@@ -10,7 +10,7 @@
 
 - `:Cdiffsplit` / `:CvsDiff`
   - Full side-by-side diff by default; [!] selects the streamed unified hunk
-    view for large files.
+    view with synchronized read-only base and working panes for large files.
   - Considered finished for now.
 
 - `:CvsAnnotate`

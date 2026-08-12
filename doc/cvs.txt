@@ -70,19 +70,24 @@ COMMANDS                                                        *cvs-commands*
         Without [!], open the original full side-by-side diff against the
         checked-out CVS revision. The working buffer remains editable and
         includes unsaved changes. With [!], stream a unified CVS diff and show
-        only changed hunks with surrounding context. The streamed view uses the
-        configured diff window kind, which defaults to a tab. Use ]c and [c to
-        move between hunks. Streamed diffs compare the file on disk, so unsaved
-        buffer changes are not included.
+        only changed hunks with surrounding context. Streamed hunks are
+        reconstructed into read-only CVS BASE and CVS WORKING panes using native
+        diff highlighting, synchronized scrolling, and synchronized cursors.
+        The streamed view uses the configured diff window kind, which defaults
+        to a tab. Paired streamed views support tab and vsplit; other configured
+        kinds fall back to a tab. Use ]c and [c to move between changes.
+        Streamed diffs compare the file on disk, so unsaved buffer changes are
+        not included.
 
                                                         *:Cdiffsplit*
 :Cdiffsplit[!]
         Without [!], open the original full side-by-side diff in a vertical
         split. The working buffer remains editable, including unsaved changes,
         and the CVS base buffer is read-only. With [!], open streamed unified
-        diff hunks in a read-only vertical split. CVS compares the file on disk
-        for the streamed form, so unsaved changes are not included and are
-        called out in the view.
+        diff hunks as synchronized, read-only CVS BASE and CVS WORKING panes in
+        a vertical split. Closing either pane restores the original working
+        buffer. CVS compares the file on disk for the streamed form, so unsaved
+        changes are not included and are called out in the view.
 
                                                         *:CvsLog*
 :CvsLog [path]

@@ -163,19 +163,19 @@ local function open_stream(view_state, opts)
   local previous = active[view_state.target_path]
   if previous then
     runner.cancel(previous.process)
-    if previous.bufnr and vim.api.nvim_buf_is_valid(previous.bufnr) then
-      vim.api.nvim_buf_delete(previous.bufnr, { force = true })
+    if previous.bufnrs and previous.bufnrs[1] then
+      require("cvs.features.diff.view").close(previous.bufnrs[1])
     end
   end
 
   view_state.loading = true
   local view = require("cvs.features.diff.view")
-  local bufnr, winid = view.open(view_state, opts)
+  local old_bufnr, new_bufnr = view.open(view_state, opts)
 
   next_request_id = next_request_id + 1
   local request = {
     id = next_request_id,
-    bufnr = bufnr,
+    bufnrs = { old_bufnr, new_bufnr },
   }
   pending[view_state.target_path] = request
   active[view_state.target_path] = request
@@ -189,26 +189,26 @@ local function open_stream(view_state, opts)
     if complete_err then
       view_state.loading = false
       view_state.error = errors.to_string(complete_err)
-      view.update(bufnr, view_state)
+      view.update(old_bufnr, view_state)
       util.notify(view_state.error, vim.log.levels.ERROR)
       return
     end
 
-    view.update(bufnr, completed)
+    view.update(old_bufnr, completed)
   end)
 
   if not ok then
     pending[view_state.target_path] = nil
     view_state.loading = false
     view_state.error = tostring(process)
-    view.update(bufnr, view_state)
+    view.update(old_bufnr, view_state)
     util.notify(view_state.error, vim.log.levels.ERROR)
-    return nil, bufnr, winid
+    return nil, old_bufnr, new_bufnr
   end
 
   request.process = process
-  view.set_process(bufnr, process)
-  return process, bufnr, winid
+  view.set_process(old_bufnr, process)
+  return process, old_bufnr, new_bufnr
 end
 
 local function open_full(view_state)
@@ -272,7 +272,7 @@ end
 
 function M.cancel(bufnr)
   for target_path, request in pairs(active) do
-    if request.bufnr == bufnr then
+    if request.bufnrs and vim.tbl_contains(request.bufnrs, bufnr) then
       if pending[target_path] == request then
         pending[target_path] = nil
       end
