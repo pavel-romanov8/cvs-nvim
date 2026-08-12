@@ -88,7 +88,7 @@ return function()
       code = 1,
       signal = 0,
       stdout = { "A added.lua" },
-      stderr = { 'cvs update: New directory "_bmad" -- ignored' },
+      stderr = { "cvs update: New directory `dmad' --ignored" },
     })
     assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "new-directory advisory preserves status")
     assert_true(

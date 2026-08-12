@@ -280,8 +280,8 @@ local function wait_for_latest_request(request, callback)
 end
 
 local function is_missing_directory_advisory(line)
-  return line:match("^cvs%s+update:%s+New directory .+ %-%- ignored%s*$") ~= nil
-    or line:match("^cvs%s+server:%s+New directory .+ %-%- ignored%s*$") ~= nil
+  return line:match("^cvs%s+update:%s+New directory .+ %-%-%s*ignored%s*$") ~= nil
+    or line:match("^cvs%s+server:%s+New directory .+ %-%-%s*ignored%s*$") ~= nil
 end
 
 local function only_missing_directory_advisories(lines)
