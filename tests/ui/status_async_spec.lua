@@ -88,12 +88,35 @@ return function()
       code = 2,
       signal = 0,
       stdout = { "A added.lua" },
-      stderr = { "cvs update: New directory `dmad' --ignored" },
+      stderr = {
+        "cvs update: New directory `dmad' --ignored",
+        " cvs server: New directory `_bmad' -- ignored ",
+      },
     })
     assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "new-directory advisory preserves status")
     assert_true(
       buffer_text(bufnr):find("Status unavailable:", 1, true) == nil,
       "new-directory advisory is not a status failure"
+    )
+
+    pending = nil
+    service.refresh(bufnr)
+    pending({
+      code = 2,
+      signal = 0,
+      stdout = { "M partial.lua" },
+      stderr = {
+        "cvs update: New directory `dmad' --ignored",
+        "cvs [update aborted]: authorization failed",
+      },
+    })
+    assert_true(
+      buffer_text(bufnr):find("authorization failed", 1, true) ~= nil,
+      "a real error after an advisory is displayed"
+    )
+    assert_true(
+      buffer_text(bufnr):find("Status unavailable: status_failed: cvs update: New directory", 1, true) == nil,
+      "an advisory does not hide the real error"
     )
 
     pending = nil

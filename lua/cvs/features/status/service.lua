@@ -280,8 +280,7 @@ local function wait_for_latest_request(request, callback)
 end
 
 local function is_missing_directory_advisory(line)
-  return line:match("^cvs%s+update:%s+New directory .+ %-%-%s*ignored%s*$") ~= nil
-    or line:match("^cvs%s+server:%s+New directory .+ %-%-%s*ignored%s*$") ~= nil
+  return vim.trim(line):match("New directory%s+.+%s+%-%-%s*ignored$") ~= nil
 end
 
 local function only_missing_directory_advisories(lines)
@@ -295,6 +294,19 @@ local function only_missing_directory_advisories(lines)
     end
   end
   return found
+end
+
+local function first_status_error_line(lines)
+  local first_nonblank
+  for _, line in ipairs(lines or {}) do
+    if vim.trim(line) ~= "" then
+      first_nonblank = first_nonblank or line
+      if not is_missing_directory_advisory(line) then
+        return line
+      end
+    end
+  end
+  return first_nonblank
 end
 
 local function status_result_error(result)
@@ -317,7 +329,7 @@ local function status_result_error(result)
   elseif result.signal and result.signal ~= 0 then
     message = ("CVS status was terminated by signal %d."):format(result.signal)
   else
-    message = result.stderr[1]
+    message = first_status_error_line(result.stderr)
   end
   if not message then
     message = ("CVS status exited with code %d."):format(result.code)
