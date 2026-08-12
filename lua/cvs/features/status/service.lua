@@ -302,10 +302,9 @@ local function status_result_error(result)
     return nil
   end
 
-  -- Some CVS variants exit 1 when a dry run cannot create a new repository
-  -- directory. Status for the existing working copy is still usable.
-  if result.code == 1
-    and (not result.signal or result.signal == 0)
+  -- CVS variants use different nonzero codes when a dry run cannot create a
+  -- new repository directory. Status for the existing working copy is usable.
+  if (not result.signal or result.signal == 0)
     and only_missing_directory_advisories(result.stderr)
   then
     return nil

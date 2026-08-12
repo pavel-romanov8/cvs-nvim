@@ -85,7 +85,7 @@ return function()
     pending = nil
     service.refresh(bufnr)
     pending({
-      code = 1,
+      code = 2,
       signal = 0,
       stdout = { "A added.lua" },
       stderr = { "cvs update: New directory `dmad' --ignored" },
