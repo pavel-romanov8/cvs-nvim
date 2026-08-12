@@ -122,12 +122,34 @@ return function()
     pending = nil
     service.refresh(bufnr)
     pending({
+      code = 1,
+      signal = 0,
+      stdout = { "M useful.lua" },
+      stderr = {
+        "cvs update: New directory `_bmad' --ignored",
+        'cvs update: cannot open directory "old/one": No such file or directory',
+        "cvs server: cannot open directory `old/two': No such file or directory",
+      },
+    })
+    assert_true(buffer_text(bufnr):find("M  useful.lua", 1, true) ~= nil, "partial status retains useful files")
+    assert_true(
+      buffer_text(bufnr):find("Status incomplete: CVS skipped 2 missing directories", 1, true) ~= nil,
+      "partial status reports skipped directories"
+    )
+    assert_true(
+      buffer_text(bufnr):find("Status unavailable:", 1, true) == nil,
+      "missing directories do not reject partial status"
+    )
+
+    pending = nil
+    service.refresh(bufnr)
+    pending({
       code = 124,
       signal = 15,
       stdout = { "M partial.lua" },
       stderr = { "cvs [update aborted]: received termination signal" },
     })
-    assert_true(buffer_text(bufnr):find("A  added.lua", 1, true) ~= nil, "failed refresh retains the complete snapshot")
+    assert_true(buffer_text(bufnr):find("M  useful.lua", 1, true) ~= nil, "failed refresh retains the previous snapshot")
     assert_true(buffer_text(bufnr):find("partial.lua", 1, true) == nil, "failed refresh does not render partial stdout")
     assert_true(buffer_text(bufnr):find("Status unavailable:", 1, true) ~= nil, "failed refresh displays its error")
     assert_true(buffer_text(bufnr):find("timed out after 60000 ms", 1, true) ~= nil, "timeout explains termination")

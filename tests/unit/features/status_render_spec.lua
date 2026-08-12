@@ -132,4 +132,17 @@ return function()
   local error_text = table.concat(error_lines, "\n")
   assert_match(error_text, "Status unavailable: status_failed", "status failure")
   assert_true(not error_text:find("Working copy is clean", 1, true), "failed status is not reported as clean")
+
+  local warning_lines = render.lines({
+    workspace = { root_dir = "/tmp/example" },
+    scope_label = "workspace",
+    total_count = 1,
+    selectable_count = 0,
+    selected_count = 0,
+    counts = { unknown = 1 },
+    sections = {},
+    warning = "Status incomplete: CVS skipped 1 missing directory; files beneath it may be absent.",
+  })
+  local warning_text = table.concat(warning_lines, "\n")
+  assert_match(warning_text, "Status incomplete: CVS skipped 1 missing directory", "partial status warning")
 end

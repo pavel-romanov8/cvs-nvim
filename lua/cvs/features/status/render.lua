@@ -133,6 +133,10 @@ function M.lines(view_state)
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Status unavailable: " .. view_state.error
     highlight(highlights, #lines, "ErrorMsg")
+  elseif view_state.warning then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = view_state.warning
+    highlight(highlights, #lines, "WarningMsg")
   end
 
   if view_state.loading then

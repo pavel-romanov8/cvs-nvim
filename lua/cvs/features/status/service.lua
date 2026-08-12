@@ -170,6 +170,7 @@ local function build_view_state(snapshot, opts, previous)
     selectable_count = selectable_count,
     selected_count = selected_count,
     messages = vim.deepcopy(previous.messages or snapshot.messages or {}),
+    warning = snapshot.warning,
     error = snapshot.error,
     loading = snapshot.loading == true,
     refreshing = previous.refreshing == true,
@@ -283,11 +284,19 @@ local function is_missing_directory_advisory(line)
   return vim.trim(line):match("New directory%s+.+%s+%-%-%s*ignored$") ~= nil
 end
 
-local function only_missing_directory_advisories(lines)
+local function is_missing_directory_error(line)
+  return vim.trim(line):match("cannot open directory%s+.+:%s+No such file or directory$") ~= nil
+end
+
+local function is_recoverable_status_line(line)
+  return is_missing_directory_advisory(line) or is_missing_directory_error(line)
+end
+
+local function only_recoverable_status_lines(lines)
   local found = false
   for _, line in ipairs(lines or {}) do
     if vim.trim(line) ~= "" then
-      if not is_missing_directory_advisory(line) then
+      if not is_recoverable_status_line(line) then
         return false
       end
       found = true
@@ -301,12 +310,27 @@ local function first_status_error_line(lines)
   for _, line in ipairs(lines or {}) do
     if vim.trim(line) ~= "" then
       first_nonblank = first_nonblank or line
-      if not is_missing_directory_advisory(line) then
+      if not is_recoverable_status_line(line) then
         return line
       end
     end
   end
   return first_nonblank
+end
+
+local function status_result_warning(result)
+  local skipped = 0
+  for _, line in ipairs(result.stderr or {}) do
+    if is_missing_directory_error(line) then
+      skipped = skipped + 1
+    end
+  end
+  if skipped == 0 then
+    return nil
+  end
+
+  return ("Status incomplete: CVS skipped %d missing director%s; files beneath %s may be absent.")
+    :format(skipped, skipped == 1 and "y" or "ies", skipped == 1 and "it" or "them")
 end
 
 local function status_result_error(result)
@@ -315,9 +339,10 @@ local function status_result_error(result)
   end
 
   -- CVS variants use different nonzero codes when a dry run cannot create a
-  -- new repository directory. Status for the existing working copy is usable.
+  -- directory or traverse a missing working-copy directory. Existing results
+  -- remain useful, but skipped subtrees are marked as incomplete.
   if (not result.signal or result.signal == 0)
-    and only_missing_directory_advisories(result.stderr)
+    and only_recoverable_status_lines(result.stderr)
   then
     return nil
   end
@@ -548,6 +573,7 @@ function M.collect(opts)
   local parsed = parse.parse(snapshot.result.stdout)
   snapshot.files = reconcile_working_copy(parsed.files, workspace)
   snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
+  snapshot.warning = status_result_warning(snapshot.result)
 
   if is_latest_request(request) then
     finish_collection(snapshot, opts)
@@ -635,6 +661,7 @@ function M.collect_async(opts, callback, request)
     local parsed = parse.parse(result.stdout)
     snapshot.files = reconcile_working_copy(parsed.files, workspace)
     snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
+    snapshot.warning = status_result_warning(result)
     if is_latest_request(request) then
       finish_collection(snapshot, opts)
     end
