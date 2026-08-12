@@ -69,7 +69,7 @@ return function()
     'printf "U file.lua\\n"',
   }, fake_cvs)
   local missing = service.collect({ path = temp_dir, force = true })
-  assert_eq(missing.files[1].code, "!", "locally deleted tracked file gets a missing marker")
+  assert_eq(missing.files[1].code, "R", "locally deleted tracked file gets a removal marker")
   assert_eq(missing.files[1].status, "missing", "locally deleted tracked file is visible as missing")
   vim.fn.writefile({ "working content" }, target)
   vim.fn.writefile({

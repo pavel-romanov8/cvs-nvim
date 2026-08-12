@@ -53,7 +53,7 @@ return function()
         kind = "missing",
         title = "Missing",
         items = {
-          { code = "!", path = "lua/cvs/missing.lua", status = "missing", selectable = false, selected = false },
+          { code = "R", path = "lua/cvs/missing.lua", status = "missing", selectable = false, selected = false },
         },
       },
       {
@@ -83,13 +83,13 @@ return function()
   assert_match(text, "Files: 5", "file count")
   assert_match(text, "Commit selection: 1/2", "commit selection count")
   assert_match(text, "Snapshot: 2026-03-27 12:00:00 (cached)", "cached snapshot marker")
-  assert_match(text, "M: 1, A: 1, !: 1, R: 1, ?: 1", "summary counts")
+  assert_match(text, "M: 1, A: 1, R: 2, ?: 1", "summary counts")
   assert_match(text, "Selected (1)", "selected section")
   assert_match(text, "Modified (1)", "modified section")
   assert_match(text, "Missing (1)", "missing section")
   assert_match(text, "    M  lua/cvs/init.lua", "unselected file line")
   assert_match(text, "    A  lua/cvs/new.lua", "selected file line")
-  assert_match(text, "    !  lua/cvs/missing.lua", "missing file line")
+  assert_match(text, "    R  lua/cvs/missing.lua", "missing file line")
   assert_true(not text:find("[ ]", 1, true), "unselected files do not use checkboxes")
   assert_true(not text:find("[x]", 1, true), "selected files do not use checkboxes")
   assert_match(text, "    ?  notes.txt", "non-selectable file line")

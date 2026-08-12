@@ -421,7 +421,7 @@ local function reconcile_working_copy(files, workspace)
     if file.status == types.status.updated then
       local target = resolve_target_path(workspace, file.path)
       if uv.fs_lstat(target) == nil and entries.working_revision(target) then
-        file.code = "!"
+        file.code = "R"
         file.status = types.status.missing
       end
     end

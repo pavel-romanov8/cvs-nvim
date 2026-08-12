@@ -14,7 +14,7 @@ local status_order = {
 local summary_codes = {
   modified = "M",
   added = "A",
-  missing = "!",
+  missing = "R",
   removed = "R",
   unknown = "?",
   conflict = "C",
@@ -53,13 +53,24 @@ local function highlight_label(highlights, row, line, value_group)
 end
 
 local function summary_line(counts)
-  local parts = {}
+  local totals = {}
+  local codes = {}
 
   for _, status in ipairs(status_order) do
     local count = counts[status]
     if count and count > 0 then
-      parts[#parts + 1] = ("%s: %d"):format(summary_codes[status], count)
+      local code = summary_codes[status]
+      if totals[code] == nil then
+        codes[#codes + 1] = code
+        totals[code] = 0
+      end
+      totals[code] = totals[code] + count
     end
+  end
+
+  local parts = {}
+  for _, code in ipairs(codes) do
+    parts[#parts + 1] = ("%s: %d"):format(code, totals[code])
   end
 
   if #parts == 0 then

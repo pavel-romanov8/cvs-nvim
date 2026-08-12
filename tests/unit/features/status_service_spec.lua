@@ -88,7 +88,7 @@ return function()
   }, {
     root_dir = temp_dir,
   })
-  assert_eq(reconciled[1].code, "!", "missing tracked file gets a distinct status code")
+  assert_eq(reconciled[1].code, "R", "missing tracked file gets a removal status code")
   assert_eq(reconciled[1].status, "missing", "missing tracked file is not treated as incoming")
   assert_eq(reconciled[2].status, "updated", "present tracked file remains incoming")
   assert_eq(reconciled[3].status, "updated", "untracked incoming file remains incoming")

@@ -26,7 +26,7 @@ return function()
       { code = "M", path = "lua/cvs/init.lua", status = "modified" },
       { code = "A", path = "lua/cvs/new.lua", status = "added" },
       { code = "R", path = "lua/cvs/old.lua", status = "removed" },
-      { code = "!", path = "lua/cvs/missing.lua", status = "missing" },
+      { code = "R", path = "lua/cvs/missing.lua", status = "missing" },
       { code = "?", path = "notes.txt", status = "unknown" },
       { code = "C", path = "plugin/cvs.lua", status = "conflict" },
       { code = "U", path = "README.md", status = "updated" },
