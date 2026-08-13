@@ -24,12 +24,6 @@ local function render(bufnr, view_state)
   end
 end
 
-local function close_buffer(bufnr)
-  if vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_buf_delete(bufnr, { force = true })
-  end
-end
-
 local function first_item_row(row_map)
   local first = nil
   for row, target in pairs(row_map or {}) do
@@ -124,12 +118,81 @@ function M.get_remove_targets(bufnr, start_row, end_row)
   end)
 end
 
+function M.close(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local winid = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_buf(winid) ~= bufnr then
+    winid = vim.fn.win_findbuf(bufnr)[1]
+  end
+  if not winid or not vim.api.nvim_win_is_valid(winid) then
+    return
+  end
+
+  local attachment = state.get_buffer(bufnr)
+  if attachment then
+    attachment.cursor = vim.api.nvim_win_get_cursor(winid)
+    state.attach_buffer(bufnr, attachment)
+  end
+
+  local tabpage = vim.api.nvim_win_get_tabpage(winid)
+  if #vim.api.nvim_tabpage_list_wins(tabpage) > 1 then
+    vim.api.nvim_win_close(winid, true)
+  elseif #vim.api.nvim_list_tabpages() > 1 then
+    vim.api.nvim_set_current_win(winid)
+    vim.cmd("tabclose!")
+  else
+    vim.api.nvim_set_current_win(winid)
+    vim.cmd("enew")
+  end
+end
+
+function M.reopen(bufnr, opts)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return nil
+  end
+
+  local attachment = state.get_buffer(bufnr)
+  if not attachment or attachment.kind ~= "status" then
+    return nil
+  end
+
+  local origin_win = vim.api.nvim_get_current_win()
+  local winids = vim.fn.win_findbuf(bufnr)
+  local winid = winids[1]
+  if winid and vim.api.nvim_win_is_valid(winid) then
+    vim.api.nvim_set_current_win(winid)
+    return winid
+  end
+
+  attachment.origin_win = origin_win
+  state.attach_buffer(bufnr, attachment)
+
+  opts = opts or {}
+  local status_config = require("cvs.config").get().ui.status
+  winid = window.open(bufnr, {
+    kind = opts.kind or status_config.kind,
+    height = opts.height or status_config.height,
+  })
+
+  local cursor = attachment.cursor or vim.api.nvim_buf_get_mark(bufnr, '"')
+  local max_line = vim.api.nvim_buf_line_count(bufnr)
+  vim.api.nvim_win_set_cursor(winid, {
+    math.max(1, math.min(cursor[1], max_line)),
+    cursor[2],
+  })
+  return winid
+end
+
 function M.open(view_state, opts)
   opts = opts or {}
   local origin_win = vim.api.nvim_get_current_win()
 
   local bufnr = ui_buffer.create({
     name = ("cvs://status/%s"):format(view_state.workspace.root_dir),
+    bufhidden = "hide",
     filetype = "cvs-status",
   })
 
@@ -140,7 +203,7 @@ function M.open(view_state, opts)
       mode = "n",
       lhs = "q",
       rhs = function()
-        close_buffer(bufnr)
+        M.close(bufnr)
       end,
       desc = "Close CVS status",
     },

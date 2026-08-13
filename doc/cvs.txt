@@ -47,6 +47,11 @@ COMMANDS                                                        *cvs-commands*
         when a working-copy buffer is written. Use [!] or press R in the status
         view to query CVS again immediately.
 
+        Press q to hide the status view. Its selections, inline diffs, and cursor
+        position are retained for the current Neovim session. Running |:Cvs|
+        again in the same workspace and scope reopens that state; |:Cvs| with
+        [!] also refreshes it against CVS.
+
                                                          *:CvsStatus*
 :CvsStatus[!] [path]
         Alias for the CVS status view used by |:Cvs|.

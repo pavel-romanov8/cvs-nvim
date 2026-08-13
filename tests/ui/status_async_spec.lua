@@ -242,6 +242,9 @@ return function()
     assert_true(cached.snapshot.files[1].path == "synchronous.lua", "newer synchronous query owns the cache")
 
     vim.api.nvim_win_close(winid, true)
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
   end)
 
   runner.run = original_run

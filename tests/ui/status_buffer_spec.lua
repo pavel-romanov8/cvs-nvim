@@ -39,6 +39,10 @@ return function()
 
   local temp_dir = vim.fn.tempname()
   vim.fn.mkdir(temp_dir, "p")
+  vim.fn.mkdir(temp_dir .. "/CVS", "p")
+  vim.fn.writefile({ ":local:/tmp/repository" }, temp_dir .. "/CVS/Root")
+  vim.fn.writefile({ "module" }, temp_dir .. "/CVS/Repository")
+  vim.fn.writefile({ "source" }, temp_dir .. "/source.lua")
   vim.fn.writefile({ "changed" }, temp_dir .. "/changed.lua")
   vim.fn.writefile({ "new" }, temp_dir .. "/new.lua")
   vim.fn.writefile({ "unknown one" }, temp_dir .. "/unknown-one.lua")
@@ -47,6 +51,7 @@ return function()
 
   local source_bufnr = vim.api.nvim_create_buf(true, false)
   vim.bo[source_bufnr].swapfile = false
+  vim.api.nvim_buf_set_name(source_bufnr, temp_dir .. "/source.lua")
   vim.api.nvim_win_set_buf(0, source_bufnr)
   local source_win = vim.api.nvim_get_current_win()
   local source_height = vim.api.nvim_win_get_height(source_win)
@@ -305,6 +310,23 @@ return function()
   assert_eq(forced, true, ":Cvs! refreshes the current status buffer")
   assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "refresh preserves eligible selection")
   assert_eq(state.get_buffer(bufnr).view_state.selected["new.lua"], nil, "refresh keeps unselected file clear")
+
+  modified_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
+  status_buffer.close(bufnr)
+  assert_true(vim.api.nvim_buf_is_valid(bufnr), "closing status retains its buffer")
+  assert_eq(#vim.fn.win_findbuf(bufnr), 0, "closing status hides its buffer")
+  assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "hidden status retains selection")
+
+  local reopened_bufnr, reopened_win = service.open({})
+  assert_eq(reopened_bufnr, bufnr, ":Cvs reopens the retained status buffer")
+  assert_true(vim.api.nvim_win_is_valid(reopened_win), "retained status opens in a new window")
+  assert_true(
+    vim.api.nvim_get_current_line():find("M  changed.lua", 1, true) ~= nil,
+    "reopened status restores its cursor"
+  )
+  assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "reopened status retains selection")
+  winid = reopened_win
 
   local original_commit_open = commit_service.open
   local commit_opts

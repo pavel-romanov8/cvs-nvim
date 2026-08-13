@@ -683,6 +683,21 @@ function M.open(opts)
     return nil, err
   end
 
+  local retained_bufnr = state.find_buffer(function(bufnr, attachment)
+    return vim.api.nvim_buf_is_valid(bufnr)
+      and attachment.kind == "status"
+      and (uv.fs_realpath(attachment.root_dir) or attachment.root_dir)
+        == (uv.fs_realpath(workspace.root_dir) or workspace.root_dir)
+      and cache_key(attachment.view_state.opts or {}) == cache_key(opts)
+  end)
+  if retained_bufnr then
+    local winid = require("cvs.features.status.buffer").reopen(retained_bufnr, opts)
+    if opts.force then
+      M.refresh(retained_bufnr)
+    end
+    return retained_bufnr, winid
+  end
+
   local loading_snapshot = {
     workspace = workspace,
     files = {},
