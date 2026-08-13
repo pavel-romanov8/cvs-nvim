@@ -111,12 +111,12 @@ return function()
       },
     })
     assert_true(
-      buffer_text(bufnr):find("authorization failed", 1, true) ~= nil,
-      "a real error after an advisory is displayed"
+      buffer_text(bufnr):find("M  partial.lua", 1, true) ~= nil,
+      "parseable status survives unrelated diagnostics"
     )
     assert_true(
-      buffer_text(bufnr):find("Status unavailable: status_failed: cvs update: New directory", 1, true) == nil,
-      "an advisory does not hide the real error"
+      buffer_text(bufnr):find("Status incomplete: CVS exited with code 2", 1, true) ~= nil,
+      "accepted nonzero status is marked incomplete"
     )
 
     pending = nil
@@ -129,12 +129,13 @@ return function()
         "cvs update: New directory `_bmad' --ignored",
         'cvs update: cannot open directory "old/one": No such file or directory',
         "cvs server: cannot open directory `old/two': No such file or directory",
+        "cvs update: skipping directory pkg/cvs/datasets2/ub_cache_digester/test_util",
       },
     })
     assert_true(buffer_text(bufnr):find("M  useful.lua", 1, true) ~= nil, "partial status retains useful files")
     assert_true(
-      buffer_text(bufnr):find("Status incomplete: CVS skipped 2 missing directories", 1, true) ~= nil,
-      "partial status reports skipped directories"
+      buffer_text(bufnr):find("Status incomplete: CVS exited with code 1", 1, true) ~= nil,
+      "partial status reports the nonzero exit"
     )
     assert_true(
       buffer_text(bufnr):find("Status unavailable:", 1, true) == nil,
@@ -172,6 +173,18 @@ return function()
       callback({ code = 0, stdout = {}, stderr = {} })
     end
     assert_true(completed == 2, "disabled-cache queries both complete")
+
+    local diagnostic_error
+    service.collect_async({ workspace = state.get_buffer(bufnr).view_state.workspace }, function(_, collect_err)
+      diagnostic_error = collect_err
+    end)
+    callbacks[#callbacks]({
+      code = 1,
+      signal = 0,
+      stdout = { "cvs update: Updating ." },
+      stderr = { "cvs [update aborted]: authorization failed" },
+    })
+    assert_true(diagnostic_error and diagnostic_error.kind == "status_failed", "errors without status entries still fail")
 
     local failed_snapshot
     local failed_error

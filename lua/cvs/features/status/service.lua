@@ -288,8 +288,14 @@ local function is_missing_directory_error(line)
   return vim.trim(line):match("cannot open directory%s+.+:%s+No such file or directory$") ~= nil
 end
 
+local function is_skipped_directory_advisory(line)
+  return vim.trim(line):match("skipping directory%s+.+$") ~= nil
+end
+
 local function is_recoverable_status_line(line)
-  return is_missing_directory_advisory(line) or is_missing_directory_error(line)
+  return is_missing_directory_advisory(line)
+    or is_missing_directory_error(line)
+    or is_skipped_directory_advisory(line)
 end
 
 local function only_recoverable_status_lines(lines)
@@ -319,31 +325,16 @@ local function first_status_error_line(lines)
 end
 
 local function status_result_warning(result)
-  local skipped = 0
-  for _, line in ipairs(result.stderr or {}) do
-    if is_missing_directory_error(line) then
-      skipped = skipped + 1
-    end
-  end
-  if skipped == 0 then
+  if result.code == 0 then
     return nil
   end
 
-  return ("Status incomplete: CVS skipped %d missing director%s; files beneath %s may be absent.")
-    :format(skipped, skipped == 1 and "y" or "ies", skipped == 1 and "it" or "them")
+  return ("Status incomplete: CVS exited with code %d; showing the status entries it returned.")
+    :format(result.code)
 end
 
-local function status_result_error(result)
+local function status_result_error(result, parsed)
   if result.code == 0 and (not result.signal or result.signal == 0) then
-    return nil
-  end
-
-  -- CVS variants use different nonzero codes when a dry run cannot create a
-  -- directory or traverse a missing working-copy directory. Existing results
-  -- remain useful, but skipped subtrees are marked as incomplete.
-  if (not result.signal or result.signal == 0)
-    and only_recoverable_status_lines(result.stderr)
-  then
     return nil
   end
 
@@ -353,6 +344,8 @@ local function status_result_error(result)
       :format(require("cvs.config").get().cvs.timeout_ms)
   elseif result.signal and result.signal ~= 0 then
     message = ("CVS status was terminated by signal %d."):format(result.signal)
+  elseif #(parsed.files or {}) > 0 or only_recoverable_status_lines(result.stderr) then
+    return nil
   else
     message = first_status_error_line(result.stderr)
   end
@@ -564,13 +557,13 @@ function M.collect(opts)
     cwd = workspace.root_dir,
   })
 
-  local result_err = status_result_error(snapshot.result)
+  local parsed = parse.parse(snapshot.result.stdout)
+  local result_err = status_result_error(snapshot.result, parsed)
   if result_err then
     settle_request(request, nil, result_err)
     return nil, result_err
   end
 
-  local parsed = parse.parse(snapshot.result.stdout)
   snapshot.files = reconcile_working_copy(parsed.files, workspace)
   snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
   snapshot.warning = status_result_warning(snapshot.result)
@@ -652,13 +645,13 @@ function M.collect_async(opts, callback, request)
     end
 
     snapshot.result = result
-    local result_err = status_result_error(result)
+    local parsed = parse.parse(result.stdout)
+    local result_err = status_result_error(result, parsed)
     if result_err then
       deliver_request(request, callback, nil, result_err)
       return
     end
 
-    local parsed = parse.parse(result.stdout)
     snapshot.files = reconcile_working_copy(parsed.files, workspace)
     snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
     snapshot.warning = status_result_warning(result)

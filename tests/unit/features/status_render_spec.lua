@@ -141,8 +141,8 @@ return function()
     selected_count = 0,
     counts = { unknown = 1 },
     sections = {},
-    warning = "Status incomplete: CVS skipped 1 missing directory; files beneath it may be absent.",
+    warning = "Status incomplete: CVS exited with code 1; showing the status entries it returned.",
   })
   local warning_text = table.concat(warning_lines, "\n")
-  assert_match(warning_text, "Status incomplete: CVS skipped 1 missing directory", "partial status warning")
+  assert_match(warning_text, "Status incomplete: CVS exited with code 1", "partial status warning")
 end
