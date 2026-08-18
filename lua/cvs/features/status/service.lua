@@ -1196,10 +1196,12 @@ function M.discard_current(bufnr, start_row, end_row)
   end
 
   local deletes_new_files = false
+  local creates_cvs_backups = false
   for _, item in ipairs(targets) do
     if item.status == types.status.unknown or item.status == types.status.added then
       deletes_new_files = true
-      break
+    elseif item.status == types.status.modified or item.status == types.status.conflict then
+      creates_cvs_backups = true
     end
   end
 
@@ -1207,8 +1209,9 @@ function M.discard_current(bufnr, start_row, end_row)
   local message = ("Discard changes to %d %s?"):format(#targets, noun)
   if deletes_new_files then
     message = message .. "\n\nUnknown and newly added files will be permanently deleted."
-  else
-    message = message .. "\n\nModified contents are preserved by CVS in .# backup files."
+  end
+  if creates_cvs_backups then
+    message = message .. "\n\nNew CVS .# backups created by this discard will be removed."
   end
   local confirmed
   if M._confirm_discard then

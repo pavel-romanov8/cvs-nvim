@@ -132,6 +132,32 @@ return function()
     assert_eq(discard_result.code, 0, "unknown file deletion reports success")
     assert_eq(metadata.changed_count, 1, "unknown file deletion reports its change")
     assert_eq(vim.fn.filereadable(temp_dir .. "/unknown.lua"), 0, "unknown file is deleted")
+
+    vim.fn.writefile({ "modified" }, temp_dir .. "/modified.lua")
+    runner.run = function(_, _, callback)
+      vim.fn.writefile({ "discarded" }, temp_dir .. "/.#modified.lua.1.7")
+      callback({ code = 0, stdout = {}, stderr = {} })
+    end
+    service.discard({
+      workspace = { root_dir = temp_dir },
+      items = {
+        { path = "modified.lua", status = "modified" },
+      },
+      on_complete = function(result)
+        discard_result = result
+      end,
+    })
+    assert_eq(discard_result.code, 0, "discard backup cleanup reports success")
+    assert_eq(vim.fn.filereadable(temp_dir .. "/.#modified.lua.1.7"), 0, "new CVS discard backup is deleted")
+
+    vim.fn.writefile({ "older recovery" }, temp_dir .. "/.#modified.lua.1.6")
+    service.discard({
+      workspace = { root_dir = temp_dir },
+      items = {
+        { path = "modified.lua", status = "modified" },
+      },
+    })
+    assert_eq(vim.fn.filereadable(temp_dir .. "/.#modified.lua.1.6"), 1, "pre-existing CVS backup is preserved")
     vim.fn.delete(temp_dir, "rf")
   end)
 

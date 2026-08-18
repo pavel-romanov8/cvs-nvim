@@ -44,6 +44,9 @@ COMMANDS                                                        *cvs-commands*
         with cvs update -C, missing files are restored with cvs update, and
         scheduled removals are cancelled with cvs add. Unknown and newly added
         files are permanently deleted; the confirmation identifies this case.
+        CVS creates .# backup files while reverting modifications with update
+        -C. Backups newly created by X are removed after a successful revert;
+        pre-existing .# files are left untouched.
 
         Status queries run asynchronously. The buffer opens immediately with
         a loading message, and refreshes keep the previous snapshot visible

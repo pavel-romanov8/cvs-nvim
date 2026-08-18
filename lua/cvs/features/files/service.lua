@@ -10,6 +10,22 @@ local util = require("cvs.core.util")
 
 local M = {}
 
+local function cvs_backups(path)
+  local backups = {}
+  local directory = vim.fs.dirname(path)
+  local prefix = ".#" .. vim.fs.basename(path) .. "."
+
+  pcall(function()
+    for name in vim.fs.dir(directory) do
+      if vim.startswith(name, prefix) then
+        backups[util.path_join(directory, name)] = true
+      end
+    end
+  end)
+
+  return backups
+end
+
 local function scope_label(workspace, path)
   if not path or path == "" then
     return "current buffer"
@@ -240,8 +256,10 @@ function M.discard(opts)
         groups[item.status] = groups[item.status] or {
           build_command = build_command,
           files = {},
+          paths = {},
         }
         groups[item.status].files[#groups[item.status].files + 1] = file
+        groups[item.status].paths[#groups[item.status].paths + 1] = paths[1]
       end
     end
   end
@@ -268,6 +286,7 @@ function M.discard(opts)
       operations[#operations + 1] = {
         status = status_name,
         files = group.files,
+        paths = group.paths,
         command = group.build_command({ files = group.files }),
       }
     end
@@ -328,11 +347,27 @@ function M.discard(opts)
         return
       end
 
+      local backups_before = {}
+      if operation.status == "modified" or operation.status == "conflict" then
+        for _, path in ipairs(operation.paths) do
+          backups_before[path] = cvs_backups(path)
+        end
+      end
+
       runner.run(operation.command, {
         cwd = workspace.root_dir,
       }, function(result)
         if result.code == 0 then
           changed_count = changed_count + #operation.files
+          if operation.status == "modified" or operation.status == "conflict" then
+            for _, path in ipairs(operation.paths) do
+              for backup in pairs(cvs_backups(path)) do
+                if not (backups_before[path] or {})[backup] and vim.fn.delete(backup) ~= 0 then
+                  errors_found[#errors_found + 1] = ("Could not delete CVS discard backup: %s"):format(backup)
+                end
+              end
+            end
+          end
         else
           errors_found[#errors_found + 1] = result.stderr[1]
             or result.stdout[1]
