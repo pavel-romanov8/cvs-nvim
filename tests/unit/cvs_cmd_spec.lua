@@ -41,6 +41,16 @@ return function()
     "commit command includes message and files"
   )
 
+  local multiline_commit_cmd = cmd.commit({
+    message = "Fix it\n\nNOTIFY: nickname",
+    files = { "pkg/file.lua" },
+  })
+  assert_eq(
+    multiline_commit_cmd[5],
+    "Fix it\n\nNOTIFY: nickname",
+    "commit command preserves a multiline message as one argument"
+  )
+
   local remove_cmd = cmd.remove({ path = "pkg/file.lua" })
   assert_eq(table.concat(remove_cmd, " "), "cvs -f remove -f pkg/file.lua", "remove command includes force flag and path")
 

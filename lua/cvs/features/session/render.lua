@@ -76,7 +76,8 @@ function M.lines(view_state)
   end
 
   if view_state.command then
-    lines[#lines + 1] = comment(("Command: %s"):format(table.concat(view_state.command, " ")))
+    local command_text = table.concat(view_state.command, " "):gsub("\r", "\\r"):gsub("\n", "\\n")
+    lines[#lines + 1] = comment(("Command: %s"):format(command_text))
   end
 
   if view_state.messages and #view_state.messages > 0 then

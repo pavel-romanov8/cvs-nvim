@@ -32,4 +32,22 @@ return function()
   assert_eq(text:find("# Selected Files (2):", 1, true) ~= nil, true, "selected file heading is rendered")
   assert_eq(text:find("#   pkg/one.lua", 1, true) ~= nil, true, "first selected file is rendered")
   assert_eq(text:find("#   pkg/two.lua", 1, true) ~= nil, true, "second selected file is rendered")
+
+  rendered = buffer._render_lines({
+    message_lines = { "Subject", "", "NOTIFY: nickname" },
+    workspace = { root_dir = "/tmp/work" },
+    scope_label = "pkg/one.lua",
+    phase = "running",
+    files = { "pkg/one.lua" },
+    command = { "cvs", "commit", "-m", "Subject\n\nNOTIFY: nickname", "pkg/one.lua" },
+  })
+  for _, line in ipairs(rendered) do
+    assert_eq(line:find("\n", 1, true), nil, "rendered command stays on one buffer line")
+  end
+  text = table.concat(rendered, "\n")
+  assert_eq(
+    text:find("Subject\\n\\nNOTIFY: nickname", 1, true) ~= nil,
+    true,
+    "rendered command escapes message newlines"
+  )
 end
