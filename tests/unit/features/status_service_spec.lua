@@ -101,5 +101,25 @@ return function()
   assert_eq(#missing.items, 1, "missing tracked file is visible")
   assert_eq(missing.items[1].selectable, false, "missing file must be scheduled before commit")
   assert_eq(missing_view.total_count, 1, "incoming file remains hidden from status")
+
+  vim.fn.mkdir(temp_dir .. "/nested", "p")
+  vim.fn.writefile({ "recovery" }, temp_dir .. "/.#tracked.lua.1.6")
+  vim.fn.writefile({ "nested recovery" }, temp_dir .. "/nested/.#other.lua.1.2")
+  local with_backups = service._append_cvs_backups({
+    { code = "?", path = ".#tracked.lua.1.6", status = "unknown" },
+  }, {
+    root_dir = temp_dir,
+  }, {})
+  assert_eq(#with_backups, 2, "CVS backups are added without duplicating reported files")
+  assert_eq(with_backups[2].path, "nested/.#other.lua.1.2", "nested CVS backup is workspace-relative")
+  assert_eq(with_backups[2].status, "unknown", "CVS backup uses the deletable unknown status")
+
+  local file_scoped_backups = service._append_cvs_backups({}, {
+    root_dir = temp_dir,
+  }, {
+    path = "tracked.lua",
+  })
+  assert_eq(#file_scoped_backups, 1, "file scope includes only backups for that file")
+  assert_eq(file_scoped_backups[1].path, ".#tracked.lua.1.6", "file-scoped CVS backup path")
   vim.fn.delete(temp_dir, "rf")
 end

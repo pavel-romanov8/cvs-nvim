@@ -133,6 +133,21 @@ return function()
     assert_eq(metadata.changed_count, 1, "unknown file deletion reports its change")
     assert_eq(vim.fn.filereadable(temp_dir .. "/unknown.lua"), 0, "unknown file is deleted")
 
+    vim.fn.writefile({ "recovery" }, temp_dir .. "/.#unknown.lua.1.7")
+    service.discard({
+      workspace = { root_dir = temp_dir },
+      items = {
+        { path = ".#unknown.lua.1.7", status = "unknown" },
+      },
+      on_complete = function(result, value)
+        discard_result = result
+        metadata = value
+      end,
+    })
+    assert_eq(discard_result.code, 0, "CVS backup deletion reports success")
+    assert_eq(metadata.changed_count, 1, "CVS backup deletion reports its change")
+    assert_eq(vim.fn.filereadable(temp_dir .. "/.#unknown.lua.1.7"), 0, "CVS backup is deleted")
+
     vim.fn.writefile({ "modified" }, temp_dir .. "/modified.lua")
     runner.run = function(_, _, callback)
       vim.fn.writefile({ "discarded" }, temp_dir .. "/.#modified.lua.1.7")

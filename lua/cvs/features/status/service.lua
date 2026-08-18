@@ -1,5 +1,6 @@
 local capabilities = require("cvs.cvs.capabilities")
 local cmd = require("cvs.cvs.cmd")
+local conflict_detect = require("cvs.features.conflicts.detect")
 local context = require("cvs.cvs.context")
 local entries = require("cvs.cvs.entries")
 local errors = require("cvs.core.errors")
@@ -445,6 +446,61 @@ local function resolve_target_path(workspace, path)
   return util.path_join(workspace.root_dir, path)
 end
 
+local function append_cvs_backups(files, workspace, opts)
+  files = files or {}
+  opts = opts or {}
+
+  local seen = {}
+  for _, file in ipairs(files) do
+    seen[file.path] = true
+  end
+
+  local targets = {}
+  if opts.files and #opts.files > 0 then
+    for _, file in ipairs(opts.files) do
+      targets[#targets + 1] = resolve_target_path(workspace, file)
+    end
+  elseif opts.path then
+    targets[1] = resolve_target_path(workspace, opts.path)
+  else
+    targets[1] = workspace.root_dir
+  end
+
+  local backups = {}
+  for _, target in ipairs(targets) do
+    local stat = uv.fs_stat(target)
+    if stat and stat.type == "directory" then
+      vim.list_extend(backups, conflict_detect.scan(target))
+    else
+      local directory = vim.fs.dirname(target)
+      local prefix = ".#" .. vim.fs.basename(target) .. "."
+      for _, backup in ipairs(conflict_detect.scan(directory)) do
+        if vim.startswith(vim.fs.basename(backup), prefix) then
+          backups[#backups + 1] = backup
+        end
+      end
+    end
+  end
+
+  table.sort(backups)
+  local root_prefix = workspace.root_dir .. "/"
+  for _, backup in ipairs(backups) do
+    if vim.startswith(backup, root_prefix) then
+      local path = backup:sub(#root_prefix + 1)
+      if not seen[path] then
+        seen[path] = true
+        files[#files + 1] = {
+          code = "?",
+          path = path,
+          status = types.status.unknown,
+        }
+      end
+    end
+  end
+
+  return files
+end
+
 local function reconcile_working_copy(files, workspace)
   for _, file in ipairs(files or {}) do
     if file.status == types.status.updated then
@@ -564,7 +620,7 @@ function M.collect(opts)
     return nil, result_err
   end
 
-  snapshot.files = reconcile_working_copy(parsed.files, workspace)
+  snapshot.files = reconcile_working_copy(append_cvs_backups(parsed.files, workspace, opts), workspace)
   snapshot.messages = vim.list_extend(parsed.messages, snapshot.result.stderr)
   snapshot.warning = status_result_warning(snapshot.result)
 
@@ -652,7 +708,7 @@ function M.collect_async(opts, callback, request)
       return
     end
 
-    snapshot.files = reconcile_working_copy(parsed.files, workspace)
+    snapshot.files = reconcile_working_copy(append_cvs_backups(parsed.files, workspace, opts), workspace)
     snapshot.messages = vim.list_extend(parsed.messages, result.stderr)
     snapshot.warning = status_result_warning(result)
     if is_latest_request(request) then
@@ -1248,6 +1304,7 @@ end
 
 M._build_view_state = build_view_state
 M._cache_key = cache_key
+M._append_cvs_backups = append_cvs_backups
 M._reconcile_working_copy = reconcile_working_copy
 
 return M
