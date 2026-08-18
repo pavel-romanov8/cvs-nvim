@@ -50,6 +50,16 @@ return function()
   local update_cmd = cmd.update({})
   assert_eq(table.concat(update_cmd, " "), "cvs -f -q update -d", "update creates repository directories")
 
+  local restore_cmd = cmd.restore({ files = { "pkg/file.lua" } })
+  assert_eq(table.concat(restore_cmd, " "), "cvs -f -q update pkg/file.lua", "restore checks out missing files")
+
+  local discard_cmd = cmd.discard({ files = { "pkg/file.lua" } })
+  assert_eq(
+    table.concat(discard_cmd, " "),
+    "cvs -f -q update -C pkg/file.lua",
+    "discard replaces local changes"
+  )
+
   local annotate_cmd = cmd.annotate({ path = "pkg/file.lua", revision = "1.7" })
   assert_eq(table.concat(annotate_cmd, " "), "cvs -f annotate -r 1.7 pkg/file.lua", "annotate pins the revision")
 

@@ -39,6 +39,12 @@ COMMANDS                                                        *cvs-commands*
         section. Press r on a missing file to schedule its removal in CVS; it
         then becomes selectable for commit in the Removed section.
 
+        Press X on a file, section heading, or visual range to discard those
+        changes after confirmation. Modified and conflicted files are restored
+        with cvs update -C, missing files are restored with cvs update, and
+        scheduled removals are cancelled with cvs add. Unknown and newly added
+        files are permanently deleted; the confirmation identifies this case.
+
         Status queries run asynchronously. The buffer opens immediately with
         a loading message, and refreshes keep the previous snapshot visible
         while CVS runs. Refreshes preserve the file under the cursor when it

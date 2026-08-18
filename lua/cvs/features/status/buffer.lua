@@ -125,6 +125,17 @@ function M.get_remove_targets(bufnr, start_row, end_row)
   end)
 end
 
+function M.get_discard_targets(bufnr, start_row, end_row)
+  return collect_targets(bufnr, start_row, end_row, function(item)
+    return item.status == "modified"
+      or item.status == "conflict"
+      or item.status == "missing"
+      or item.status == "added"
+      or item.status == "removed"
+      or item.status == "unknown"
+  end)
+end
+
 function M.close(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
@@ -344,6 +355,23 @@ function M.open(view_state, opts)
         actions.remove_current(bufnr)
       end,
       desc = "Remove current file from CVS",
+    },
+    {
+      mode = "n",
+      lhs = "X",
+      rhs = function()
+        actions.discard_current(bufnr)
+      end,
+      desc = "Discard current CVS change",
+    },
+    {
+      mode = "x",
+      lhs = "X",
+      rhs = function()
+        local start_row, end_row = visual_rows()
+        actions.discard_current(bufnr, start_row, end_row)
+      end,
+      desc = "Discard selected CVS changes",
     },
   })
 

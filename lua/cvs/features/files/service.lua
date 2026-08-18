@@ -195,6 +195,161 @@ function M.remove(opts)
   })
 end
 
+local discard_commands = {
+  modified = cmd.discard,
+  conflict = cmd.discard,
+  missing = cmd.restore,
+  added = cmd.remove,
+  removed = cmd.add,
+}
+
+function M.discard(opts)
+  opts = opts or {}
+  local workspace = opts.workspace
+  if not workspace or not workspace.root_dir then
+    local err = errors.new("workspace_missing", "discard requires an explicit CVS workspace")
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
+  end
+
+  local groups = {}
+  local unknown = {}
+  local seen = {}
+  local requested_count = 0
+
+  for _, item in ipairs(opts.items or {}) do
+    local files, paths, err = normalize_workspace_files(workspace, { item.path })
+    if not files then
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return nil, err
+    end
+
+    local file = files[1]
+    if not seen[file] then
+      seen[file] = true
+      requested_count = requested_count + 1
+      if item.status == "unknown" then
+        unknown[#unknown + 1] = { file = file, path = paths[1] }
+      else
+        local build_command = discard_commands[item.status]
+        if not build_command then
+          local err = errors.new("discard_unsupported", ("cannot discard CVS status: %s"):format(item.status))
+          util.notify(errors.to_string(err), vim.log.levels.WARN)
+          return nil, err
+        end
+        groups[item.status] = groups[item.status] or {
+          build_command = build_command,
+          files = {},
+        }
+        groups[item.status].files[#groups[item.status].files + 1] = file
+      end
+    end
+  end
+
+  if requested_count == 0 then
+    local err = errors.new("files_missing", "select at least one file to discard")
+    util.notify(errors.to_string(err), vim.log.levels.ERROR)
+    return nil, err
+  end
+
+  if requested_count > #unknown then
+    local caps = capabilities.detect()
+    if not caps.executable then
+      local err = errors.new("cvs_missing", ("CVS executable is not available: %s"):format(caps.bin))
+      util.notify(errors.to_string(err), vim.log.levels.ERROR)
+      return nil, err
+    end
+  end
+
+  local operations = {}
+  for _, status_name in ipairs({ "modified", "conflict", "missing", "added", "removed" }) do
+    local group = groups[status_name]
+    if group then
+      operations[#operations + 1] = {
+        status = status_name,
+        files = group.files,
+        command = group.build_command({ files = group.files }),
+      }
+    end
+  end
+
+  if queue.is_busy(workspace.root_dir) then
+    util.notify(("Queued CVS discard for %d files."):format(requested_count))
+  end
+
+  queue.enqueue(workspace.root_dir, function(done)
+    local errors_found = {}
+    local changed_count = 0
+
+    for _, item in ipairs(unknown) do
+      if vim.fn.isdirectory(item.path) == 1 then
+        errors_found[#errors_found + 1] = ("Refusing to delete unknown directory: %s"):format(item.file)
+      elseif vim.fn.delete(item.path) == 0 then
+        changed_count = changed_count + 1
+      else
+        errors_found[#errors_found + 1] = ("Could not delete unknown file: %s"):format(item.file)
+      end
+    end
+
+    local function finish()
+      local ok, finish_err = pcall(function()
+        if changed_count > 0 then
+          state.invalidate_status_cache(workspace.root_dir)
+          events.emit("CvsChanged", {
+            root_dir = workspace.root_dir,
+            operation = "discard",
+            count = changed_count,
+          })
+        end
+
+        local result = {
+          code = #errors_found == 0 and 0 or 1,
+          stdout = {},
+          stderr = errors_found,
+        }
+        if opts.on_complete then
+          opts.on_complete(result, {
+            workspace = workspace,
+            requested_count = requested_count,
+            changed_count = changed_count,
+          })
+        end
+      end)
+      done()
+      if not ok then
+        util.notify(("CVS discard failed internally: %s"):format(finish_err), vim.log.levels.ERROR)
+      end
+    end
+
+    local function run_operation(index)
+      local operation = operations[index]
+      if not operation then
+        finish()
+        return
+      end
+
+      runner.run(operation.command, {
+        cwd = workspace.root_dir,
+      }, function(result)
+        if result.code == 0 then
+          changed_count = changed_count + #operation.files
+        else
+          errors_found[#errors_found + 1] = result.stderr[1]
+            or result.stdout[1]
+            or ("CVS discard exited with code %d for %s files."):format(result.code, operation.status)
+        end
+        run_operation(index + 1)
+      end)
+    end
+
+    run_operation(1)
+  end, function(queue_err)
+    util.notify(("CVS discard queue error: %s"):format(queue_err), vim.log.levels.ERROR)
+  end)
+
+  return true
+end
+
 M._resolve_target_path = resolve_target_path
 M._scope_label = scope_label
 M._normalize_workspace_files = normalize_workspace_files

@@ -34,6 +34,18 @@ function M.update(opts)
   return add_files(cmd, opts or {})
 end
 
+function M.restore(opts)
+  local cmd = base()
+  vim.list_extend(cmd, { "-q", "update" })
+  return add_files(cmd, opts or {})
+end
+
+function M.discard(opts)
+  local cmd = base()
+  vim.list_extend(cmd, { "-q", "update", "-C" })
+  return add_files(cmd, opts or {})
+end
+
 function M.commit(opts)
   local cmd = base()
   table.insert(cmd, "commit")

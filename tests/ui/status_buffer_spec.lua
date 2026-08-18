@@ -86,12 +86,32 @@ return function()
   assert_eq(vim.fn.maparg("A", "n", false, true).desc, "Add current file to CVS as binary", "binary add mapping")
   assert_eq(vim.fn.maparg("A", "x", false, true).desc, "Add selected files to CVS as binary", "visual binary add mapping")
   assert_eq(vim.fn.maparg("cc", "n", false, true).desc, "Commit selected CVS files", "commit selection mapping")
+  assert_eq(vim.fn.maparg("X", "n", false, true).desc, "Discard current CVS change", "discard mapping")
+  assert_eq(vim.fn.maparg("X", "x", false, true).desc, "Discard selected CVS changes", "visual discard mapping")
   assert_eq(vim.fn.maparg("dd", "n", false, true).desc, "Diff current file against its CVS base", "full diff mapping")
   assert_eq(vim.fn.maparg("o", "n", false, true).desc, "Open current file in a split", "split mapping")
   assert_eq(vim.fn.maparg("gO", "n", false, true).desc, "Open current file in a vertical split", "vertical split mapping")
   assert_eq(vim.fn.maparg("O", "n", false, true).desc, "Open current file in a tab", "tab mapping")
   assert_eq(vim.fn.maparg("p", "n", false, true).desc, "Open current file in preview", "preview mapping")
   assert_eq(state.get_buffer(bufnr).view_state.selected_count, 0, "selection starts empty")
+
+  local original_discard = files_service.discard
+  local discard_opts
+  files_service.discard = function(opts)
+    discard_opts = opts
+    return true
+  end
+  service._confirm_discard = function()
+    return true
+  end
+  local discard_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { discard_row, 0 })
+  service.discard_current(bufnr)
+  assert_eq(#discard_opts.items, 1, "discard passes the current file")
+  assert_eq(discard_opts.items[1].path, "changed.lua", "discard passes the current path")
+  assert_eq(discard_opts.items[1].status, "modified", "discard passes the current CVS status")
+  service._confirm_discard = nil
+  files_service.discard = original_discard
 
   local original_collect = diff_service.collect
   local diff_path

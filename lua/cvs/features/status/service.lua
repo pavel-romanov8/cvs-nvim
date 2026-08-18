@@ -1183,6 +1183,66 @@ function M.remove_current(bufnr)
   })
 end
 
+function M.discard_current(bufnr, start_row, end_row)
+  local attachment, view_state = get_attachment(bufnr)
+  if not attachment then
+    return nil, errors.new("status_buffer_missing", "could not locate the CVS status buffer state")
+  end
+
+  local targets = require("cvs.features.status.buffer").get_discard_targets(bufnr, start_row, end_row)
+  if #targets == 0 then
+    util.notify("No discardable CVS changes in this selection.", vim.log.levels.WARN)
+    return nil
+  end
+
+  local deletes_new_files = false
+  for _, item in ipairs(targets) do
+    if item.status == types.status.unknown or item.status == types.status.added then
+      deletes_new_files = true
+      break
+    end
+  end
+
+  local noun = #targets == 1 and "file" or "files"
+  local message = ("Discard changes to %d %s?"):format(#targets, noun)
+  if deletes_new_files then
+    message = message .. "\n\nUnknown and newly added files will be permanently deleted."
+  else
+    message = message .. "\n\nModified contents are preserved by CVS in .# backup files."
+  end
+  local confirmed
+  if M._confirm_discard then
+    confirmed = M._confirm_discard(message, targets)
+  else
+    confirmed = vim.fn.confirm(message, "&Discard\n&Cancel", 2) == 1
+  end
+  if not confirmed then
+    return nil
+  end
+
+  return require("cvs.features.files.service").discard({
+    workspace = view_state.workspace,
+    items = targets,
+    on_complete = function(result, metadata)
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+
+      local result_message
+      if result.code == 0 then
+        result_message = ("Discarded changes to %d %s."):format(metadata.changed_count, noun)
+      else
+        result_message = result.stderr[1] or "Some CVS changes could not be discarded."
+      end
+      util.notify(result_message, result.code == 0 and vim.log.levels.INFO or vim.log.levels.WARN)
+      M.refresh(bufnr, {
+        messages = { result_message },
+        force = false,
+      })
+    end,
+  })
+end
+
 M._build_view_state = build_view_state
 M._cache_key = cache_key
 M._reconcile_working_copy = reconcile_working_copy

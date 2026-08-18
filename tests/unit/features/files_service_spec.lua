@@ -58,9 +58,11 @@ return function()
     end
 
     local command
+    local commands = {}
     local cwd
     runner.run = function(next_command, opts, callback)
       command = next_command
+      commands[#commands + 1] = next_command
       cwd = opts.cwd
       callback({ code = 0, stdout = {}, stderr = {} })
     end
@@ -88,6 +90,49 @@ return function()
     })
     assert_eq(table.concat(command, " "), "cvs add -kb assets/logo.png", "binary add passes -kb before its target")
     assert_eq(metadata.binary, true, "binary add callback identifies its mode")
+
+    commands = {}
+    local discard_result
+    service.discard({
+      workspace = { root_dir = "/tmp/work" },
+      items = {
+        { path = "modified.lua", status = "modified" },
+        { path = "conflict.lua", status = "conflict" },
+        { path = "missing.lua", status = "missing" },
+        { path = "added.lua", status = "added" },
+        { path = "removed.lua", status = "removed" },
+      },
+      on_complete = function(result, value)
+        discard_result = result
+        metadata = value
+      end,
+    })
+    assert_eq(#commands, 5, "discard runs one command per CVS status")
+    assert_eq(table.concat(commands[1], " "), "cvs -q update -C modified.lua", "modified files are reverted")
+    assert_eq(table.concat(commands[2], " "), "cvs -q update -C conflict.lua", "conflicts are reverted")
+    assert_eq(table.concat(commands[3], " "), "cvs -q update missing.lua", "missing files are restored")
+    assert_eq(table.concat(commands[4], " "), "cvs remove -f added.lua", "newly added files are removed")
+    assert_eq(table.concat(commands[5], " "), "cvs add removed.lua", "scheduled removals are restored")
+    assert_eq(discard_result.code, 0, "successful discard reports success")
+    assert_eq(metadata.changed_count, 5, "discard reports every changed file")
+
+    local temp_dir = vim.fn.tempname()
+    vim.fn.mkdir(temp_dir, "p")
+    vim.fn.writefile({ "new" }, temp_dir .. "/unknown.lua")
+    service.discard({
+      workspace = { root_dir = temp_dir },
+      items = {
+        { path = "unknown.lua", status = "unknown" },
+      },
+      on_complete = function(result, value)
+        discard_result = result
+        metadata = value
+      end,
+    })
+    assert_eq(discard_result.code, 0, "unknown file deletion reports success")
+    assert_eq(metadata.changed_count, 1, "unknown file deletion reports its change")
+    assert_eq(vim.fn.filereadable(temp_dir .. "/unknown.lua"), 0, "unknown file is deleted")
+    vim.fn.delete(temp_dir, "rf")
   end)
 
   vim.api.nvim_buf_get_name = original_buf_get_name

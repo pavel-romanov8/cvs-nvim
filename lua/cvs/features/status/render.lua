@@ -193,6 +193,8 @@ function M.lines(view_state)
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "r schedules the current file for removal"
   highlight(highlights, #lines, "CvsMuted")
+  lines[#lines + 1] = "X discards changes or deletes new files after confirmation"
+  highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "R refreshes the status snapshot"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "q closes this buffer"
