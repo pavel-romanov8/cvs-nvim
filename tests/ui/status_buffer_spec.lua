@@ -29,6 +29,10 @@ local function find_line(bufnr, text)
   return nil
 end
 
+local function feed(keys)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "x", false)
+end
+
 return function()
   vim.cmd("silent! tabonly!")
   vim.cmd("silent! only!")
@@ -133,8 +137,12 @@ return function()
   local heading_range = status_buffer.get_targets(bufnr, modified_row, added_heading)
   assert_eq(#heading_range, 1, "range does not expand a crossed section heading")
   assert_eq(heading_range[1].path, "changed.lua", "range includes only covered file rows")
-  assert_eq(service.toggle_selection(bufnr, modified_row, added_row), true, "range selects all unique files")
-  assert_eq(state.get_buffer(bufnr).view_state.selected_count, 2, "range deduplicates inline diff rows")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
+  vim.cmd("normal! V")
+  vim.api.nvim_win_set_cursor(winid, { added_row, 0 })
+  feed("-")
+  assert_eq(vim.fn.mode(), "n", "visual mapping returns to normal mode")
+  assert_eq(state.get_buffer(bufnr).view_state.selected_count, 2, "visual mapping selects all unique files")
   local selected_heading = find_line(bufnr, "Selected (2)")
   assert_true(selected_heading ~= nil, "selected files render in a dedicated section")
   assert_true(find_line(bufnr, "[x]") == nil, "selected files do not render checkboxes")
@@ -145,6 +153,8 @@ return function()
   assert_eq(service.toggle_selection(bufnr, modified_heading), true, "section heading selects its files")
   assert_eq(state.get_buffer(bufnr).view_state.selected["changed.lua"], true, "heading selects modified file")
 
+  modified_row = find_line(bufnr, "M  changed.lua")
+  vim.api.nvim_win_set_cursor(winid, { modified_row, 0 })
   service.toggle_inline_diff(bufnr)
   status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
@@ -199,6 +209,19 @@ return function()
   assert_eq(remove_opts.files[1], "missing-one.lua", "heading remove includes first missing file")
   assert_eq(remove_opts.files[2], "missing-two.lua", "heading remove includes second missing file")
   assert_true(find_line(bufnr, "Removed (2)") ~= nil, "successful heading remove refreshes files as removed")
+  local removed_heading = find_line(bufnr, "Removed (2)")
+  vim.api.nvim_win_set_cursor(winid, { removed_heading, 0 })
+  feed("-")
+  assert_eq(
+    state.get_buffer(bufnr).view_state.selected["missing-one.lua"],
+    true,
+    "removed heading selects the first removed file"
+  )
+  assert_eq(
+    state.get_buffer(bufnr).view_state.selected["missing-two.lua"],
+    true,
+    "removed heading selects the second removed file"
+  )
   files_service.remove = original_remove
   service.collect_async = original_remove_collect
   status_buffer.update(bufnr, service._build_view_state({

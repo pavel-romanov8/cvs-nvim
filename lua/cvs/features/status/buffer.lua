@@ -35,6 +35,13 @@ local function first_item_row(row_map)
   return first or 1
 end
 
+local function visual_rows()
+  local start_row = vim.fn.line("v")
+  local end_row = vim.fn.line(".")
+  vim.cmd([[execute "normal! \<Esc>"]])
+  return start_row, end_row
+end
+
 function M.get_current_item(bufnr)
   local attachment = state.get_buffer(bufnr)
   local view_state = attachment and attachment.view_state
@@ -283,7 +290,8 @@ function M.open(view_state, opts)
       mode = "x",
       lhs = "-",
       rhs = function()
-        actions.toggle_selection(bufnr, vim.fn.line("v"), vim.fn.line("."))
+        local start_row, end_row = visual_rows()
+        actions.toggle_selection(bufnr, start_row, end_row)
       end,
       desc = "Toggle CVS commit selection",
     },
@@ -307,7 +315,8 @@ function M.open(view_state, opts)
       mode = "x",
       lhs = "a",
       rhs = function()
-        actions.add_current(bufnr, vim.fn.line("v"), vim.fn.line("."))
+        local start_row, end_row = visual_rows()
+        actions.add_current(bufnr, start_row, end_row)
       end,
       desc = "Add selected files to CVS",
     },
@@ -323,7 +332,8 @@ function M.open(view_state, opts)
       mode = "x",
       lhs = "A",
       rhs = function()
-        actions.add_binary(bufnr, vim.fn.line("v"), vim.fn.line("."))
+        local start_row, end_row = visual_rows()
+        actions.add_binary(bufnr, start_row, end_row)
       end,
       desc = "Add selected files to CVS as binary",
     },
