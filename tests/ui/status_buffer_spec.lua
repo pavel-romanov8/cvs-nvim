@@ -179,6 +179,19 @@ return function()
   status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
 
+  added_row = find_line(bufnr, "A  new.lua")
+  vim.api.nvim_win_set_cursor(winid, { added_row, 0 })
+  service.toggle_inline_diff(bufnr)
+  status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+  assert_true(status_text:find("   @@ -0,0 +1 @@", 1, true) ~= nil, "added file renders against an empty base")
+  assert_true(status_text:find("   +new", 1, true) ~= nil, "added file renders all content as additions")
+
+  local unknown_row = find_line(bufnr, "?  unknown-one.lua")
+  vim.api.nvim_win_set_cursor(winid, { unknown_row, 0 })
+  service.toggle_inline_diff(bufnr)
+  status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+  assert_true(status_text:find("   +unknown one", 1, true) ~= nil, "unknown file renders all content as additions")
+
   local missing_state = service._build_view_state({
     workspace = view_state.workspace,
     generated_at = view_state.generated_at,

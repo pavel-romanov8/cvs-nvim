@@ -48,6 +48,17 @@ local committable_statuses = {
   [types.status.removed] = true,
 }
 
+local inline_diff_statuses = {
+  [types.status.modified] = true,
+  [types.status.added] = true,
+  [types.status.unknown] = true,
+}
+
+local empty_base_statuses = {
+  [types.status.added] = true,
+  [types.status.unknown] = true,
+}
+
 local function scope_label(workspace, opts)
   if opts.path then
     local prefix = workspace.root_dir .. "/"
@@ -994,8 +1005,8 @@ function M.toggle_inline_diff(bufnr)
     return true
   end
 
-  if item.status ~= types.status.modified then
-    util.notify("Inline diff is currently available for modified files only.", vim.log.levels.WARN)
+  if not inline_diff_statuses[item.status] then
+    util.notify("Inline diff is available for modified and new files only.", vim.log.levels.WARN)
     return nil
   end
 
@@ -1025,6 +1036,7 @@ function M.toggle_inline_diff(bufnr)
 
   local process = require("cvs.features.diff.service").collect({
     path = target,
+    empty_base = empty_base_statuses[item.status] or nil,
   }, function(completed, diff_err)
     if inline_requests[bufnr] ~= request then
       return

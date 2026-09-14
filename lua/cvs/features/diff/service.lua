@@ -7,6 +7,7 @@ local errors = require("cvs.core.errors")
 local parse = require("cvs.features.diff.parse")
 local runner = require("cvs.cvs.runner")
 local util = require("cvs.core.util")
+local uv = vim.uv or vim.loop
 
 local M = {}
 local next_request_id = 0
@@ -141,7 +142,110 @@ local function start_stream(view_state, callback)
   })
 end
 
+local function read_file_prefix(path, max_bytes)
+  local fd, open_err = uv.fs_open(path, "r", 438)
+  if not fd then
+    return nil, nil, errors.new("diff_failed", tostring(open_err))
+  end
+
+  local stat, stat_err = uv.fs_fstat(fd)
+  if not stat then
+    uv.fs_close(fd)
+    return nil, nil, errors.new("diff_failed", tostring(stat_err))
+  end
+
+  local byte_count = stat.size or 0
+  local read_size = byte_count
+  if max_bytes and max_bytes > 0 then
+    read_size = math.min(read_size, max_bytes)
+  end
+
+  local contents = ""
+  if read_size > 0 then
+    local read_err
+    contents, read_err = uv.fs_read(fd, read_size, 0)
+    if not contents then
+      uv.fs_close(fd)
+      return nil, nil, errors.new("diff_failed", tostring(read_err))
+    end
+  end
+  uv.fs_close(fd)
+
+  local truncated = read_size < byte_count
+  if truncated and not vim.endswith(contents, "\n") then
+    contents = contents:match("^(.*\n)") or ""
+  end
+
+  return contents, {
+    byte_count = read_size,
+    truncated = truncated,
+  }
+end
+
+local function collect_empty_base(opts, callback)
+  local target_path, err = resolve_target_path(opts)
+  if not target_path then
+    callback(nil, err)
+    return nil, err
+  end
+
+  local limits = config.get().diff
+  local contents, read, read_err = read_file_prefix(target_path, limits.max_bytes)
+  if not contents then
+    callback(nil, read_err)
+    return nil, read_err
+  end
+
+  local parsed
+  if contents:find("\0", 1, true) then
+    parsed = {
+      lines = {},
+      hunks = {},
+      messages = { "Binary file contents cannot be shown inline." },
+      binary = true,
+    }
+  else
+    local parser = parse.new({
+      max_lines = limits.max_lines,
+    })
+    parser:feed(vim.diff("", contents, {
+      result_type = "unified",
+    }))
+    parsed = parser:finish()
+    if #parsed.lines == 0 and not read.truncated then
+      parsed.messages[1] = "New file is empty."
+    end
+  end
+
+  parsed.byte_count = read.byte_count
+  if read.truncated then
+    parsed.truncated = true
+    parsed.truncation_reason = "bytes"
+  end
+
+  local source_bufnr, source_win = detect_source(target_path, opts)
+  local completed = {
+    target_path = target_path,
+    revision = "0",
+    source_bufnr = source_bufnr,
+    source_win = source_win,
+    source_modified = source_bufnr ~= nil and vim.bo[source_bufnr].modified or false,
+    parsed = parsed,
+    opts = opts,
+  }
+  local process = {
+    kill = function() end,
+  }
+  callback(completed, nil)
+  return process, nil
+end
+
 function M.collect(opts, callback)
+  opts = opts or {}
+  if opts.empty_base then
+    return collect_empty_base(opts, callback)
+  end
+
   opts = vim.tbl_extend("force", opts or {}, { stream = true })
   local view_state, err = prepare(opts)
   if not view_state then

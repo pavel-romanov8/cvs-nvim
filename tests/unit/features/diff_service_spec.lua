@@ -100,6 +100,17 @@ return function()
   assert_eq(missing, nil, "added file has no CVS base")
   assert_eq(missing_err.kind, "base_revision_missing", "missing base reports a specific error")
 
+  local new_file
+  local new_file_err
+  service.collect({ path = target, empty_base = true }, function(result, result_err)
+    new_file = result
+    new_file_err = result_err
+  end)
+  assert_eq(new_file_err, nil, "new file diff does not require a CVS base")
+  assert_eq(new_file.revision, "0", "new file diff uses an empty base")
+  assert_eq(new_file.parsed.lines[1], "@@ -0,0 +1 @@", "new file diff starts at an empty base")
+  assert_eq(new_file.parsed.lines[2], "+working content", "new file content is entirely added")
+
   config.setup()
   vim.fn.delete(temp_dir, "rf")
 end
