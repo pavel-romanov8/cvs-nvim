@@ -103,6 +103,34 @@ return function()
   assert_match(text, "cc opens a commit message for the selected files", "commit help line")
   assert_match(text, "A adds unknown files as binary (-kb)", "binary add help line")
 
+  local backup_lines = render.lines({
+    workspace = { root_dir = "/tmp/example" },
+    scope_label = "workspace",
+    total_count = 2,
+    selectable_count = 0,
+    selected_count = 0,
+    counts = { unknown = 1, backup = 1 },
+    sections = {
+      {
+        kind = "unknown",
+        title = "Unknown",
+        items = {
+          { code = "?", path = "notes.txt", status = "unknown", selectable = false },
+        },
+      },
+      {
+        kind = "backup",
+        title = "CVS Backups",
+        items = {
+          { code = "?", path = ".#init.lua.1.4", status = "unknown", is_cvs_backup = true },
+        },
+      },
+    },
+  })
+  local backup_text = table.concat(backup_lines, "\n")
+  assert_match(backup_text, "State Counts: ?: 1, #: 1", "backup summary count")
+  assert_match(backup_text, "CVS Backups (1)", "backup section")
+
   local targets = {}
   for row, target in pairs(row_map) do
     targets[target.kind] = targets[target.kind] or {}

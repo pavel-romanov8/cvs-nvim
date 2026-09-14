@@ -27,6 +27,7 @@ return function()
       { code = "A", path = "lua/cvs/new.lua", status = "added" },
       { code = "R", path = "lua/cvs/old.lua", status = "removed" },
       { code = "?", path = "notes.txt", status = "unknown" },
+      { code = "?", path = "lua/cvs/.#init.lua.1.4", status = "unknown" },
       { code = "C", path = "plugin/cvs.lua", status = "conflict" },
       { code = "U", path = "README.md", status = "updated" },
     },
@@ -37,9 +38,10 @@ return function()
 
   local view_state = service._build_view_state(snapshot, {}, {})
   assert_eq(view_state.scope_label, "workspace", "default scope label")
-  assert_eq(view_state.total_count, 5, "visible file count")
+  assert_eq(view_state.total_count, 6, "visible file count")
   assert_eq(view_state.counts.modified, 1, "modified count")
   assert_eq(view_state.counts.unknown, 1, "unknown count")
+  assert_eq(view_state.counts.backup, 1, "CVS backup count")
   assert_eq(view_state.counts.updated, nil, "updated count is hidden")
   assert_eq(view_state.messages[1], "status warning", "messages are preserved")
   assert_eq(view_state.selectable_count, 3, "committable file count")
@@ -47,6 +49,7 @@ return function()
 
   local modified = find_section(view_state, "modified")
   local unknown = find_section(view_state, "unknown")
+  local backups = find_section(view_state, "backup")
   local updated = find_section(view_state, "updated")
 
   assert_eq(#modified.items, 1, "modified section item count")
@@ -55,6 +58,9 @@ return function()
   assert_eq(modified.items[1].selected, false, "modified item starts unselected")
   assert_eq(#unknown.items, 1, "unknown section item count")
   assert_eq(unknown.items[1].selectable, false, "unknown item is not selectable")
+  assert_eq(backups.title, "CVS Backups", "CVS backups have a dedicated section")
+  assert_eq(backups.items[1].path, "lua/cvs/.#init.lua.1.4", "CVS backup section item")
+  assert_eq(backups.items[1].is_cvs_backup, true, "CVS backup item is identified for actions")
   assert_eq(updated, nil, "updated section is hidden")
 
   local selected = service._build_view_state(snapshot, {}, {
@@ -113,6 +119,8 @@ return function()
   assert_eq(#with_backups, 2, "CVS backups are added without duplicating reported files")
   assert_eq(with_backups[2].path, "nested/.#other.lua.1.2", "nested CVS backup is workspace-relative")
   assert_eq(with_backups[2].status, "unknown", "CVS backup uses the deletable unknown status")
+  assert_eq(with_backups[1].is_cvs_backup, true, "CVS-reported backup is identified")
+  assert_eq(with_backups[2].is_cvs_backup, true, "scanned CVS backup is identified")
 
   local file_scoped_backups = service._append_cvs_backups({}, {
     root_dir = temp_dir,

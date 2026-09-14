@@ -6,6 +6,7 @@ local status_order = {
   "missing",
   "removed",
   "unknown",
+  "backup",
   "conflict",
   "updated",
   "patched",
@@ -17,6 +18,7 @@ local summary_codes = {
   missing = "R",
   removed = "R",
   unknown = "?",
+  backup = "#",
   conflict = "C",
   updated = "U",
   patched = "P",
@@ -193,7 +195,7 @@ function M.lines(view_state)
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "r schedules the current file for removal"
   highlight(highlights, #lines, "CvsMuted")
-  lines[#lines + 1] = "X discards changes or deletes new files after confirmation"
+  lines[#lines + 1] = "X discards a file/section; CVS Backups deletes every backup after confirmation"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "R refreshes the status snapshot"
   highlight(highlights, #lines, "CvsMuted")

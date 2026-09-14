@@ -26,9 +26,10 @@ local status_order = {
   [types.status.missing] = 3,
   [types.status.removed] = 4,
   [types.status.unknown] = 5,
-  [types.status.conflict] = 6,
-  [types.status.updated] = 7,
-  [types.status.patched] = 8,
+  backup = 6,
+  [types.status.conflict] = 7,
+  [types.status.updated] = 8,
+  [types.status.patched] = 9,
 }
 
 local section_titles = {
@@ -37,6 +38,7 @@ local section_titles = {
   [types.status.missing] = "Missing",
   [types.status.removed] = "Removed",
   [types.status.unknown] = "Unknown",
+  backup = "CVS Backups",
   [types.status.conflict] = "Conflicts",
   [types.status.updated] = "Updated",
   [types.status.patched] = "Patched",
@@ -78,6 +80,10 @@ local function sort_items(items)
   end)
 end
 
+local function is_cvs_backup(path)
+  return vim.startswith(vim.fs.basename(path or ""), ".#")
+end
+
 local function build_sections(snapshot, selected)
   local grouped = {}
   local selected_section = {
@@ -98,8 +104,9 @@ local function build_sections(snapshot, selected)
   for _, file in ipairs(snapshot.files or {}) do
     -- U reports an incoming repository change, not a working-copy change.
     if file.status ~= types.status.updated then
+      local section_kind = is_cvs_backup(file.path) and "backup" or file.status
       total_count = total_count + 1
-      counts[file.status] = (counts[file.status] or 0) + 1
+      counts[section_kind] = (counts[section_kind] or 0) + 1
 
       local selectable = committable_statuses[file.status] == true
       local is_selected = selectable and selected[file.path] == true
@@ -107,22 +114,23 @@ local function build_sections(snapshot, selected)
         code = file.code,
         path = file.path,
         status = file.status,
+        is_cvs_backup = section_kind == "backup",
         selectable = selectable,
         selected = is_selected,
       }
 
       local section = selected_section
       if not is_selected then
-        if not grouped[file.status] then
-          grouped[file.status] = {
-            kind = file.status,
-            title = section_titles[file.status] or file.status,
+        if not grouped[section_kind] then
+          grouped[section_kind] = {
+            kind = section_kind,
+            title = section_titles[section_kind] or section_kind,
             items = {},
             selectable_count = 0,
             selected_count = 0,
           }
         end
-        section = grouped[file.status]
+        section = grouped[section_kind]
       end
       section.items[#section.items + 1] = item
 
@@ -464,6 +472,9 @@ local function append_cvs_backups(files, workspace, opts)
   local seen = {}
   for _, file in ipairs(files) do
     seen[file.path] = true
+    if is_cvs_backup(file.path) then
+      file.is_cvs_backup = true
+    end
   end
 
   local targets = {}
@@ -504,6 +515,7 @@ local function append_cvs_backups(files, workspace, opts)
           code = "?",
           path = path,
           status = types.status.unknown,
+          is_cvs_backup = true,
         }
       end
     end
@@ -1264,9 +1276,12 @@ function M.discard_current(bufnr, start_row, end_row)
   end
 
   local deletes_new_files = false
+  local deletes_cvs_backups = false
   local creates_cvs_backups = false
   for _, item in ipairs(targets) do
-    if item.status == types.status.unknown or item.status == types.status.added then
+    if item.is_cvs_backup then
+      deletes_cvs_backups = true
+    elseif item.status == types.status.unknown or item.status == types.status.added then
       deletes_new_files = true
     elseif item.status == types.status.modified or item.status == types.status.conflict then
       creates_cvs_backups = true
@@ -1277,6 +1292,9 @@ function M.discard_current(bufnr, start_row, end_row)
   local message = ("Discard changes to %d %s?"):format(#targets, noun)
   if deletes_new_files then
     message = message .. "\n\nUnknown and newly added files will be permanently deleted."
+  end
+  if deletes_cvs_backups then
+    message = message .. "\n\nCVS .# backup files will be permanently deleted."
   end
   if creates_cvs_backups then
     message = message .. "\n\nNew CVS .# backups created by this discard will be removed."

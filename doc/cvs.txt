@@ -45,8 +45,10 @@ COMMANDS                                                        *cvs-commands*
         with cvs update -C, missing files are restored with cvs update, and
         scheduled removals are cancelled with cvs add. Unknown and newly added
         files are permanently deleted; the confirmation identifies this case.
-        CVS .# recovery files are also listed as unknown files and can be
-        deleted with X.
+        CVS .# recovery files are grouped in a dedicated CVS Backups section.
+        Move to that section heading and press X to delete every listed backup
+        after one confirmation. Backup files cannot be added to CVS with a or
+        A.
         CVS creates .# backup files while reverting modifications with update
         -C. Backups newly created by X are removed after a successful revert;
         pre-existing .# files are left untouched.

@@ -106,13 +106,13 @@ end
 
 function M.get_add_targets(bufnr, start_row, end_row)
   return collect_targets(bufnr, start_row, end_row, function(item)
-    return item.status == "unknown" or item.status == "removed"
+    return (item.status == "unknown" and not item.is_cvs_backup) or item.status == "removed"
   end)
 end
 
 function M.get_binary_add_targets(bufnr, start_row, end_row)
   return collect_targets(bufnr, start_row, end_row, function(item)
-    return item.status == "unknown"
+    return item.status == "unknown" and not item.is_cvs_backup
   end)
 end
 

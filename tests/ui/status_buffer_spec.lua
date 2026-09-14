@@ -97,11 +97,13 @@ return function()
 
   local original_discard = files_service.discard
   local discard_opts
+  local confirm_message
   files_service.discard = function(opts)
     discard_opts = opts
     return true
   end
-  service._confirm_discard = function()
+  service._confirm_discard = function(message)
+    confirm_message = message
     return true
   end
   local discard_row = find_line(bufnr, "M  changed.lua")
@@ -110,6 +112,29 @@ return function()
   assert_eq(#discard_opts.items, 1, "discard passes the current file")
   assert_eq(discard_opts.items[1].path, "changed.lua", "discard passes the current path")
   assert_eq(discard_opts.items[1].status, "modified", "discard passes the current CVS status")
+
+  local backup_state = service._build_view_state({
+    workspace = view_state.workspace,
+    generated_at = view_state.generated_at,
+    files = {
+      { code = "?", path = "unknown-one.lua", status = "unknown" },
+      { code = "?", path = ".#changed.lua.1.4", status = "unknown" },
+      { code = "?", path = "nested/.#source.lua.1.2", status = "unknown" },
+    },
+    messages = {},
+  }, {}, {})
+  status_buffer.update(bufnr, backup_state)
+  local backup_heading = find_line(bufnr, "CVS Backups (2)")
+  assert_true(backup_heading ~= nil, "CVS backups render in a dedicated section")
+  assert_eq(#status_buffer.get_add_targets(bufnr, backup_heading), 0, "backup heading cannot add backups")
+  vim.api.nvim_win_set_cursor(winid, { backup_heading, 0 })
+  service.discard_current(bufnr)
+  assert_eq(#discard_opts.items, 2, "discard on the backup heading targets every backup")
+  assert_eq(discard_opts.items[1].is_cvs_backup, true, "first bulk discard target is a backup")
+  assert_eq(discard_opts.items[2].is_cvs_backup, true, "second bulk discard target is a backup")
+  assert_true(confirm_message:find("CVS .# backup files", 1, true) ~= nil, "backup cleanup confirmation is explicit")
+  status_buffer.update(bufnr, view_state)
+  vim.api.nvim_win_set_cursor(winid, { find_line(bufnr, "M  changed.lua"), 0 })
   service._confirm_discard = nil
   files_service.discard = original_discard
 
