@@ -7,6 +7,9 @@ local function assert_eq(actual, expected, message)
 end
 
 return function()
+  assert_eq(util.path_join("repo", "module", "file.lua"), "repo/module/file.lua", "path parts are joined")
+  assert_eq(util.path_join("repo", { "module", { "src" } }, "file.lua"), "repo/module/src/file.lua", "nested path parts are flattened")
+
   local original_cwd = vim.uv.cwd
   local original_buf_get_name = vim.api.nvim_buf_get_name
 

@@ -2,6 +2,20 @@ local uv = vim.uv or vim.loop
 
 local M = {}
 
+local function flatten(values, result)
+  result = result or {}
+
+  for _, value in ipairs(values) do
+    if type(value) == "table" then
+      flatten(value, result)
+    elseif value then
+      result[#result + 1] = value
+    end
+  end
+
+  return result
+end
+
 function M.notify(message, level)
   local config = require("cvs.config").get()
 
@@ -21,7 +35,7 @@ function M.normalize(path)
 end
 
 function M.path_join(...)
-  return table.concat(vim.tbl_flatten({ ... }), "/")
+  return table.concat(flatten({ ... }), "/")
 end
 
 function M.read_file(path)
