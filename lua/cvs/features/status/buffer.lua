@@ -247,9 +247,9 @@ function M.open(view_state, opts)
       mode = "n",
       lhs = "o",
       rhs = function()
-        actions.open_current(bufnr, "split")
+        actions.open_current(bufnr, "layout")
       end,
-      desc = "Open current file in a split",
+      desc = "Open current file in a matching split",
     },
     {
       mode = "n",

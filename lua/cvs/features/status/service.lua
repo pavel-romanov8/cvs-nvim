@@ -579,6 +579,45 @@ local function target_window(attachment, status_bufnr)
   return vim.api.nvim_get_current_win()
 end
 
+local function status_split_kind(bufnr)
+  local status_win = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_buf(status_win) ~= bufnr then
+    status_win = nil
+    for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+      if vim.api.nvim_win_get_tabpage(winid) == vim.api.nvim_get_current_tabpage() then
+        status_win = winid
+        break
+      end
+    end
+  end
+
+  if not status_win then
+    return "split"
+  end
+
+  local function find_parent_kind(node)
+    if node[1] == "leaf" then
+      return nil
+    end
+
+    for _, child in ipairs(node[2] or {}) do
+      if child[1] == "leaf" and child[2] == status_win then
+        -- winlayout() calls side-by-side windows a row and stacked windows a column.
+        return node[1] == "row" and "vsplit" or "split"
+      end
+
+      local kind = find_parent_kind(child)
+      if kind then
+        return kind
+      end
+    end
+
+    return nil
+  end
+
+  return find_parent_kind(vim.fn.winlayout()) or "split"
+end
+
 local function update_view(bufnr, next_state)
   require("cvs.features.status.buffer").update(bufnr, next_state)
   return next_state
@@ -967,6 +1006,10 @@ function M.open_current(bufnr, kind)
   end
 
   local escaped = vim.fn.fnameescape(target)
+  if kind == "layout" then
+    kind = status_split_kind(bufnr)
+  end
+
   if kind == "split" then
     vim.cmd("aboveleft split " .. escaped)
   elseif kind == "vsplit" then

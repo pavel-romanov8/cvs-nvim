@@ -179,7 +179,7 @@ function M.lines(view_state)
   lines[#lines + 1] = ""
   lines[#lines + 1] = "<CR> opens the current file"
   highlight(highlights, #lines, "CvsMuted")
-  lines[#lines + 1] = "o/gO/O/p opens in a split/vsplit/tab/preview"
+  lines[#lines + 1] = "o/gO/O/p opens in a matching split/vsplit/tab/preview"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "dd diffs the current file against its CVS base"
   highlight(highlights, #lines, "CvsMuted")

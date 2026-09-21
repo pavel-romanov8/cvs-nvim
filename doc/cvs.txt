@@ -37,8 +37,10 @@ COMMANDS                                                        *cvs-commands*
         horizontal layout respectively.
 
         Move to a file and press <CR> to open it in the original editing window.
-        Use o, gO, O, or p to open it in a horizontal split, vertical split,
-        tab, or preview. Press dd for a full side-by-side diff against the
+        Use o to open it in a split matching the status layout: horizontal for
+        a horizontal status window and vertical for a vertical status window.
+        Use gO, O, or p to open it in a vertical split, tab, or preview.
+        Press dd for a full side-by-side diff against the
         checked-out revision,
         or = on a modified, added, or unknown file to toggle unified hunks
         inline. Added and unknown files are shown as entirely new content
