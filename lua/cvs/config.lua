@@ -18,6 +18,8 @@ local defaults = {
   diff = {
     max_bytes = 16777216,
     max_lines = 100000,
+    syntax_highlighting = true,
+    preserve_syntax_colors = true,
   },
   ui = {
     default_kind = "tab",

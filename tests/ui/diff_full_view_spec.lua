@@ -23,6 +23,7 @@ return function()
   vim.bo[source_bufnr].filetype = "lua"
   vim.bo[source_bufnr].modified = true
 
+  local original_winhighlight = vim.wo[0].winhighlight
   local base_bufnr, base_win, source_win = full_view.open({
     target_path = "/tmp/file.lua",
     revision = "1.7",
@@ -37,8 +38,23 @@ return function()
   assert_eq(#vim.api.nvim_tabpage_list_wins(0), 2, "full diff has two windows")
   assert_true(vim.wo[base_win].diff, "base window enables native diff")
   assert_true(vim.wo[source_win].diff, "source window enables native diff")
+  assert_true(
+    vim.wo[base_win].winhighlight:find("DiffAdd:CvsDiffAdd", 1, true) ~= nil,
+    "base window preserves syntax foreground colors"
+  )
+  assert_true(
+    vim.wo[source_win].winhighlight:find("DiffText:CvsDiffText", 1, true) ~= nil,
+    "source window preserves syntax foreground colors"
+  )
+  local diff_add = vim.api.nvim_get_hl(0, { name = "CvsDiffAdd", link = false })
+  assert_eq(diff_add.fg, nil, "CVS diff backgrounds do not replace syntax foregrounds")
+  assert_true(diff_add.bg ~= nil or diff_add.ctermbg ~= nil, "CVS diff additions retain a background color")
   assert_eq(vim.bo[base_bufnr].readonly, true, "base buffer is read-only")
   assert_eq(vim.bo[base_bufnr].filetype, "lua", "base keeps the source filetype")
+  assert_true(
+    vim.treesitter.highlighter.active[base_bufnr] ~= nil or vim.bo[base_bufnr].syntax == "lua",
+    "base enables source syntax highlighting"
+  )
   assert_eq(vim.bo[base_bufnr].undolevels, -1, "base does not retain undo history")
   assert_eq(vim.api.nvim_buf_get_lines(base_bufnr, 0, -1, false)[1], "base content", "base content is loaded")
   assert_eq(vim.api.nvim_buf_get_lines(source_bufnr, 0, -1, false)[1], "working change", "working content is preserved")
@@ -47,4 +63,5 @@ return function()
   vim.api.nvim_win_close(base_win, true)
   assert_eq(vim.api.nvim_buf_is_valid(base_bufnr), false, "closing the full diff wipes its base")
   assert_eq(vim.wo[source_win].diff, false, "closing the full diff disables owned source diff mode")
+  assert_eq(vim.wo[source_win].winhighlight, original_winhighlight, "closing restores source window highlights")
 end

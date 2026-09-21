@@ -27,6 +27,7 @@ return function()
   vim.bo[source_bufnr].filetype = "lua"
   vim.bo[source_bufnr].modified = true
   local source_win = vim.api.nvim_get_current_win()
+  local original_winhighlight = vim.wo[source_win].winhighlight
 
   local old_bufnr, new_bufnr, old_win, new_win = diff_view.open({
     target_path = "/tmp/file.lua",
@@ -68,6 +69,10 @@ return function()
 
   for _, bufnr in ipairs({ old_bufnr, new_bufnr }) do
     assert_eq(vim.bo[bufnr].filetype, "lua", "hunk buffer keeps source syntax")
+    assert_true(
+      vim.treesitter.highlighter.active[bufnr] ~= nil or vim.bo[bufnr].syntax == "lua",
+      "hunk buffer enables source syntax highlighting"
+    )
     assert_eq(vim.bo[bufnr].readonly, true, "hunk buffer is read-only")
     assert_eq(vim.bo[bufnr].modifiable, false, "hunk buffer is not modifiable")
     assert_eq(vim.bo[bufnr].undolevels, -1, "hunk buffer does not retain undo history")
@@ -76,6 +81,14 @@ return function()
 
   assert_true(vim.wo[old_win].diff, "base hunk window enables native diff")
   assert_true(vim.wo[new_win].diff, "working hunk window enables native diff")
+  assert_true(
+    vim.wo[old_win].winhighlight:find("DiffAdd:CvsDiffAdd", 1, true) ~= nil,
+    "base hunk window preserves syntax foreground colors"
+  )
+  assert_true(
+    vim.wo[new_win].winhighlight:find("DiffText:CvsDiffText", 1, true) ~= nil,
+    "working hunk window preserves syntax foreground colors"
+  )
   assert_true(vim.wo[old_win].scrollbind and vim.wo[new_win].scrollbind, "paired scrolling is synchronized")
   assert_true(vim.wo[old_win].cursorbind and vim.wo[new_win].cursorbind, "paired cursors are synchronized")
 
@@ -92,6 +105,7 @@ return function()
 
   diff_view.close(new_bufnr)
   assert_eq(vim.api.nvim_win_get_buf(source_win), source_bufnr, "closing restores the original source buffer")
+  assert_eq(vim.wo[source_win].winhighlight, original_winhighlight, "closing restores source window highlights")
   assert_eq(vim.api.nvim_win_is_valid(new_win), false, "closing removes the working hunk window")
   assert_eq(vim.api.nvim_buf_is_valid(old_bufnr), false, "closing wipes the base hunk buffer")
   assert_eq(vim.api.nvim_buf_is_valid(new_bufnr), false, "closing wipes the working hunk buffer")

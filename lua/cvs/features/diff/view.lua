@@ -1,5 +1,6 @@
 local config = require("cvs.config")
 local state = require("cvs.core.state")
+local presentation = require("cvs.features.diff.presentation")
 local ui_buffer = require("cvs.ui.buffer")
 
 local M = {}
@@ -123,6 +124,8 @@ function M.close(bufnr, wiping)
   require("cvs.features.diff.service").cancel(pair.old_bufnr)
   set_diff(pair.old_win, false)
   set_diff(pair.new_win, false)
+  presentation.restore_window(pair.old_win, pair.old_style)
+  presentation.restore_window(pair.new_win, pair.new_style)
 
   if pair.restore_source then
     local restore_win = vim.api.nvim_win_is_valid(pair.old_win) and pair.old_win
@@ -178,6 +181,7 @@ local function create_buffer(view_state, side)
     ("cvs://diff/%s/%s@%s#%d"):format(side, view_state.target_path, view_state.revision, bufnr)
   )
   vim.bo[bufnr].undolevels = -1
+  presentation.enable_syntax(bufnr)
   return bufnr
 end
 
@@ -232,6 +236,8 @@ function M.open(view_state, opts)
   vim.api.nvim_win_set_buf(new_win, new_bufnr)
   vim.wo[old_win].winbar = "CVS BASE"
   vim.wo[new_win].winbar = "CVS WORKING"
+  local old_style = presentation.style_window(old_win)
+  local new_style = presentation.style_window(new_win)
 
   local pair = {
     old_bufnr = old_bufnr,
@@ -241,6 +247,8 @@ function M.open(view_state, opts)
     source_bufnr = source_bufnr,
     restore_source = restore_source,
     old_winbar = old_winbar,
+    old_style = old_style,
+    new_style = new_style,
     tabpage = tabpage,
   }
 

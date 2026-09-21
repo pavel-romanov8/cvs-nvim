@@ -1,3 +1,4 @@
+local presentation = require("cvs.features.diff.presentation")
 local ui_buffer = require("cvs.ui.buffer")
 
 local M = {}
@@ -39,8 +40,10 @@ function M.open(view_state)
 
   local previous = active[source_win]
   local owns_source_diff = not vim.wo[source_win].diff
+  local source_style
   if previous then
     owns_source_diff = previous.owns_source_diff
+    source_style = previous.source_style
     active[source_win] = nil
     if vim.api.nvim_win_is_valid(previous.base_win) then
       vim.api.nvim_win_close(previous.base_win, true)
@@ -60,6 +63,7 @@ function M.open(view_state)
   vim.bo[base_bufnr].undolevels = -1
   ui_buffer.set_lines(base_bufnr, view_state.result.stdout)
   vim.bo[base_bufnr].endofline = view_state.result.stdout_ends_with_newline ~= false
+  presentation.enable_syntax(base_bufnr)
   ui_buffer.lock(base_bufnr)
 
   local base_win = vim.api.nvim_win_call(source_win, function()
@@ -68,11 +72,15 @@ function M.open(view_state)
   end)
   vim.api.nvim_win_set_buf(base_win, base_bufnr)
 
+  source_style = source_style or presentation.style_window(source_win)
+  local base_style = presentation.style_window(base_win)
   local ok, err = pcall(function()
     enable_diff(source_win)
     enable_diff(base_win)
   end)
   if not ok then
+    presentation.restore_window(source_win, source_style)
+    presentation.restore_window(base_win, base_style)
     if owns_source_diff and vim.api.nvim_win_is_valid(source_win) then
       vim.api.nvim_win_call(source_win, function()
         vim.cmd("silent! diffoff")
@@ -91,6 +99,7 @@ function M.open(view_state)
     base_bufnr = base_bufnr,
     base_win = base_win,
     owns_source_diff = owns_source_diff,
+    source_style = source_style,
   }
 
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -103,6 +112,7 @@ function M.open(view_state)
       end
 
       active[source_win] = nil
+      presentation.restore_window(source_win, current.source_style)
       if current.owns_source_diff
         and vim.api.nvim_win_is_valid(source_win)
         and vim.api.nvim_win_get_buf(source_win) == source_bufnr
