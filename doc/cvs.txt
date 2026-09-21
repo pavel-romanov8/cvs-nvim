@@ -20,10 +20,26 @@ COMMANDS                                                        *cvs-commands*
 
                                                           *:Cvs*
 :Cvs[!] [path]
-        Open the themed CVS status view in a horizontal split. Move to a file
-        and press <CR> to open it in the original editing window. Use o, gO, O,
-        or p to open it in a horizontal split, vertical split, tab, or preview.
-        Press dd for a full side-by-side diff against the checked-out revision,
+        Open the themed CVS status view. Like Fugitive's :Git summary, it
+        uses a horizontal split by default. Standard Ex layout modifiers
+        override that layout for one invocation:
+>
+            :vertical Cvs
+            :aboveleft vertical Cvs
+            :belowright Cvs
+            :tab Cvs
+<
+        |:CvsStatus| supports the same modifiers. To make a vertical status
+        view the default, set ui.status.kind to "vsplit" (see |cvs-config|).
+        The plugin does not reserve a global <Leader> mapping.
+        While focused in an existing status split, Neovim's built-in
+        |CTRL-W_H| and |CTRL-W_J| commands move it to a left vertical or bottom
+        horizontal layout respectively.
+
+        Move to a file and press <CR> to open it in the original editing window.
+        Use o, gO, O, or p to open it in a horizontal split, vertical split,
+        tab, or preview. Press dd for a full side-by-side diff against the
+        checked-out revision,
         or = on a modified, added, or unknown file to toggle unified hunks
         inline. Added and unknown files are shown as entirely new content
         against an empty base. Press - on a file,
@@ -144,10 +160,19 @@ configured through setup():
         max_bytes = 16777216,
         max_lines = 100000,
       },
+      ui = {
+        status = {
+          kind = "vsplit",
+          width = 0.5,
+        },
+      },
     })
 <
 CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.
+The status kind accepts "split", "vsplit", "tab", or "floating". height sizes
+horizontal status splits and width sizes vertical status splits; values below
+1 are proportions of the source window.
 
 Set enabled to false to always query CVS. A ttl_ms value of 0 also prevents
 cache reuse. Regardless of these settings, the [!] form of |:Cvs| and R in the

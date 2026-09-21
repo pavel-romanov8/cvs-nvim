@@ -16,6 +16,7 @@ function M.open(lines, opts)
 
   return bufnr, window.open(bufnr, {
     kind = opts.kind or "floating",
+    position = opts.position,
     width = opts.width,
     height = opts.height,
     border = opts.border,

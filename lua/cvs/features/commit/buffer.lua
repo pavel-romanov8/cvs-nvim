@@ -154,6 +154,7 @@ function M.open(view_state, opts)
 
   local winid = window.open(bufnr, {
     kind = opts.kind or require("cvs.config").get().ui.commit.kind,
+    position = opts.position,
   })
 
   vim.api.nvim_win_set_cursor(winid, { 1, 0 })

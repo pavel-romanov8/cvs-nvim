@@ -2,7 +2,7 @@ local preview = require("cvs.ui.preview")
 
 local M = {}
 
-function M.open(context, conflicts)
+function M.open(context, conflicts, opts)
   local lines = {
     "CVS Conflicts",
     "",
@@ -23,6 +23,8 @@ function M.open(context, conflicts)
   return preview.open(lines, {
     name = "cvs://conflicts",
     filetype = "cvs",
+    kind = opts and opts.kind,
+    position = opts and opts.position,
   })
 end
 

@@ -192,7 +192,9 @@ function M.reopen(bufnr, opts)
   local status_config = require("cvs.config").get().ui.status
   winid = window.open(bufnr, {
     kind = opts.kind or status_config.kind,
+    position = opts.position,
     height = opts.height or status_config.height,
+    width = opts.width or status_config.width,
   })
 
   local cursor = attachment.cursor or vim.api.nvim_buf_get_mark(bufnr, '"')
@@ -385,7 +387,9 @@ function M.open(view_state, opts)
   local status_config = require("cvs.config").get().ui.status
   local winid = window.open(bufnr, {
     kind = opts.kind or status_config.kind,
+    position = opts.position,
     height = opts.height or status_config.height,
+    width = opts.width or status_config.width,
   })
 
   vim.api.nvim_win_set_cursor(winid, { first_item_row(view_state.row_map), 0 })

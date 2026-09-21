@@ -3,6 +3,7 @@ local root = vim.fn.getcwd()
 local tests = {
   "tests/unit/core_util_spec.lua",
   "tests/unit/commands_spec.lua",
+  "tests/unit/ui_window_spec.lua",
   "tests/unit/cvs_cmd_spec.lua",
   "tests/unit/cvs_entries_spec.lua",
   "tests/unit/features/annotate_parse_spec.lua",

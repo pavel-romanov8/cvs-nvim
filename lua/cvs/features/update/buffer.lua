@@ -36,6 +36,7 @@ function M.open(view_state, opts)
 
   return bufnr, window.open(bufnr, {
     kind = opts.kind or require("cvs.config").get().ui.update.kind,
+    position = opts.position,
   })
 end
 

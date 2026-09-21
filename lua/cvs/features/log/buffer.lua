@@ -20,6 +20,7 @@ function M.open(context, command, opts)
 
   return bufnr, window.open(bufnr, {
     kind = opts.kind or require("cvs.config").get().ui.log.kind,
+    position = opts.position,
   })
 end
 

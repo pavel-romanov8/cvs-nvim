@@ -29,6 +29,7 @@ local defaults = {
     status = {
       kind = "split",
       height = 0.5,
+      width = 0.5,
     },
     session = {
       kind = "tab",

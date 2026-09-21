@@ -15,6 +15,19 @@ local function command_opts(args)
     opts.force = true
   end
 
+  local modifiers = args.smods or {}
+  if modifiers.tab and modifiers.tab >= 0 then
+    opts.kind = "tab"
+  elseif modifiers.vertical then
+    opts.kind = "vsplit"
+  elseif modifiers.horizontal then
+    opts.kind = "split"
+  end
+
+  if modifiers.split and modifiers.split ~= "" then
+    opts.position = modifiers.split
+  end
+
   return opts
 end
 

@@ -271,6 +271,7 @@ function M.open(view_state, opts)
 
   local winid = window.open(bufnr, {
     kind = opts.kind or cfg.kind,
+    position = opts.position,
     width = opts.width or cfg.width,
   })
 
