@@ -7,6 +7,7 @@ function M.lines(view_state)
     "",
   }
   local row_map = {}
+  local highlights = {}
 
   if view_state.loading then
     lines[#lines + 1] = "Loading CVS log..."
@@ -50,29 +51,48 @@ function M.lines(view_state)
       if inline and inline.revision == entry.revision then
         local preview = {}
         if inline.loading then
-          preview = { "Loading revision contents..." }
+          preview = { "Loading revision diff..." }
         elseif inline.error then
-          preview = { "Could not load revision: " .. inline.error }
-        elseif #inline.lines == 0 then
-          preview = { "(empty file)" }
+          preview = { "Could not load diff: " .. inline.error }
+        elseif #inline.lines == 0 and #(inline.messages or {}) == 0 then
+          preview = { "No differences." }
         else
           preview = inline.lines
         end
         for _, content in ipairs(preview) do
           lines[#lines + 1] = "    | " .. content
           row_map[#lines] = entry
+          local group
+          if content:match("^@@") then
+            group = "DiffChange"
+          elseif content:match("^%+") then
+            group = "DiffAdd"
+          elseif content:match("^%-") then
+            group = "DiffDelete"
+          elseif not inline.loading and not inline.error then
+            group = "CvsMuted"
+          end
+          if group then
+            highlights[#highlights + 1] = { row = #lines, group = group }
+          end
+        end
+        for _, message in ipairs(inline.messages or {}) do
+          lines[#lines + 1] = "    | " .. message
+          row_map[#lines] = entry
+          highlights[#highlights + 1] = { row = #lines, group = "CvsMuted" }
         end
         if inline.truncated then
-          lines[#lines + 1] = "    | ... (preview truncated; press <CR> for full revision)"
+          lines[#lines + 1] = "    | ... (diff truncated; press <CR> for full view)"
           row_map[#lines] = entry
+          highlights[#highlights + 1] = { row = #lines, group = "WarningMsg" }
         end
       end
     end
   end
 
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "= toggle revision contents  <CR> open full revision  d diff  R refresh  q close"
-  return lines, row_map
+  lines[#lines + 1] = "= toggle inline diff  <CR>/d open full diff  R refresh  q close"
+  return lines, row_map, highlights
 end
 
 return M

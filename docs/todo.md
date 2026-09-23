@@ -18,7 +18,7 @@
   - Considered finished for now.
 
 - `:CvsLog`
-  - File history with toggleable inline revision contents, full revision browsing, and predecessor diffs.
+  - File history with toggleable highlighted diffs and full predecessor-diff views.
   - Considered finished for the file-history workflow.
 
 ### Existing, But Not Good Enough Yet

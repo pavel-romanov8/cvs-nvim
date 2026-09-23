@@ -136,14 +136,15 @@ COMMANDS                                                        *cvs-commands*
         Open the file's CVS revision history (or history of the given file).
         The log loads asynchronously. Each revision shows its date, author,
         state, line counts, tags, and commit message. Press = on a revision
-        to expand/collapse its contents inline (the preview shows up to 200
-        lines by default); pressing = on another revision switches the preview.
-        Press <CR> to open the full revision in a read-only split, or d to
-        view a unified diff against its predecessor. On the first branch
-        revision, the predecessor is the branch point; the initial trunk
-        revision has none. Press R to refresh or q to close. From the |:Cvs|
-        status view, press gl on a tracked file to open its history.
-        Directory-wide logs are not supported.
+        to expand/collapse its highlighted diff against its predecessor inline
+        (the preview shows up to 200 diff lines by default); pressing = on
+        another revision switches the preview. Press <CR> or d to open the
+        full diff in a read-only split, which immediately shows a loading
+        indicator while CVS runs. On the first branch revision, the
+        predecessor is the branch point; the initial trunk revision is shown
+        as additions against an empty file. Press R to refresh or q to close.
+        From the |:Cvs| status view, press gl on a tracked file to open its
+        history. Directory-wide logs are not supported.
 
                                                         *:CvsAnnotate*
 :CvsAnnotate [path]
@@ -183,9 +184,10 @@ configured through setup():
       },
     })
 <
-The inline |:CvsLog| revision preview is limited to 200 lines by default.
+The inline |:CvsLog| revision diff is limited to 200 diff lines by default.
 Set ui.log.preview_lines to another positive number, or 0 for no line limit.
-The <CR> full-revision view is unaffected by this setting.
+The <CR> full-diff view is unaffected by this setting (but uses the general
+|:CvsDiff| output limits).
 
 CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.

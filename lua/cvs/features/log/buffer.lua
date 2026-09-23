@@ -6,7 +6,7 @@ local M = {}
 local namespace = vim.api.nvim_create_namespace("cvs-log")
 
 local function render(bufnr, view_state)
-  local lines, row_map = require("cvs.features.log.render").lines(view_state)
+  local lines, row_map, highlights = require("cvs.features.log.render").lines(view_state)
   ui_buffer.set_lines(bufnr, lines)
   ui_buffer.lock(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
@@ -15,6 +15,9 @@ local function render(bufnr, view_state)
     if line:match("^revision [%d.]+") then
       vim.api.nvim_buf_add_highlight(bufnr, namespace, "CvsSection", row - 1, 0, -1)
     end
+  end
+  for _, highlight in ipairs(highlights) do
+    vim.api.nvim_buf_add_highlight(bufnr, namespace, highlight.group, highlight.row - 1, 6, -1)
   end
   local attachment = state.get_buffer(bufnr)
   if attachment then
@@ -52,10 +55,10 @@ function M.open(view_state, opts)
     end, desc = "Refresh CVS history" },
     { mode = "n", lhs = "<CR>", rhs = function()
       require("cvs.features.log.service").open_revision(bufnr)
-    end, desc = "Open CVS revision" },
+    end, desc = "Open CVS revision diff" },
     { mode = "n", lhs = "=", rhs = function()
       require("cvs.features.log.service").toggle_preview(bufnr)
-    end, desc = "Toggle inline CVS revision contents" },
+    end, desc = "Toggle inline CVS revision diff" },
     { mode = "n", lhs = "d", rhs = function()
       require("cvs.features.log.service").diff_revision(bufnr)
     end, desc = "Diff CVS revision with its predecessor" },

@@ -5,9 +5,9 @@ local errors = require("cvs.core.errors")
 local parse = require("cvs.features.log.parse")
 local runner = require("cvs.cvs.runner")
 local state = require("cvs.core.state")
-local ui_buffer = require("cvs.ui.buffer")
 local util = require("cvs.core.util")
-local window = require("cvs.ui.window")
+local revision_diff = require("cvs.features.log.diff")
+local diff_buffer = require("cvs.features.log.diff_buffer")
 
 local M = {}
 
@@ -129,37 +129,29 @@ function M.toggle_preview(bufnr)
     return false
   end
 
-  local inline = { revision = entry.revision, loading = true, lines = {} }
+  local inline = { revision = entry.revision, loading = true, lines = {}, messages = {} }
   view_state.inline = inline
   local token = {}
   attachment.preview_token = token
   require("cvs.features.log.buffer").update(bufnr, view_state)
 
-  local command = cmd.base({ path = view_state.request.path, revision = entry.revision })
-  local ok, process = pcall(runner.run, command, {
-    cwd = view_state.request.cwd,
-    timeout = false,
-  }, function(result)
+  local ok, process = pcall(revision_diff.collect, view_state.request, entry.revision, function(diff, err)
     local current = state.get_buffer(bufnr)
     if not current or current.preview_token ~= token then
       return
     end
     current.preview_process = nil
     inline.loading = false
-    if result.code ~= 0 or (result.signal or 0) ~= 0 then
-      inline.error = result.stderr[1] or ("CVS revision %s could not be loaded"):format(entry.revision)
+    if err then
+      inline.error = err
     else
       local limit = require("cvs.config").get().ui.log.preview_lines
-      local count = limit and limit > 0 and math.min(#result.stdout, limit) or #result.stdout
+      local count = limit and limit > 0 and math.min(#diff.parsed.lines, limit) or #diff.parsed.lines
       for i = 1, count do
-        if result.stdout[i]:find("\0", 1, true) then
-          inline.lines = {}
-          inline.error = "Binary file contents cannot be previewed."
-          break
-        end
-        inline.lines[#inline.lines + 1] = result.stdout[i]
+        inline.lines[#inline.lines + 1] = diff.parsed.lines[i]
       end
-      inline.truncated = #result.stdout > count
+      inline.messages = diff.parsed.messages
+      inline.truncated = diff.parsed.truncated or #diff.parsed.lines > count
     end
     require("cvs.features.log.buffer").update(bufnr, view_state)
   end)
@@ -173,54 +165,38 @@ function M.toggle_preview(bufnr)
   return true
 end
 
-local function show_output(name, filetype, lines)
-  local bufnr = ui_buffer.create({ name = name, filetype = filetype })
-  ui_buffer.set_lines(bufnr, #lines > 0 and lines or { "(empty file)" })
-  ui_buffer.lock(bufnr)
-  ui_buffer.set_keymaps(bufnr, {
-    { mode = "n", lhs = "q", rhs = function()
-      vim.api.nvim_buf_delete(bufnr, { force = true })
-    end, desc = "Close CVS revision view" },
-  })
-  return bufnr, window.open(bufnr, { kind = "split" })
-end
-
 function M.open_revision(bufnr)
   local view_state, entry = selected(bufnr)
   if not entry then
     return nil
   end
-  local command = cmd.base({ path = view_state.request.path, revision = entry.revision })
-  return runner.run(command, { cwd = view_state.request.cwd, timeout = false }, function(result)
-    if result.code ~= 0 or (result.signal or 0) ~= 0 then
-      util.notify(result.stderr[1] or ("CVS revision %s could not be loaded"):format(entry.revision), vim.log.levels.ERROR)
+  local view = {
+    path = view_state.target_path,
+    from = parse.predecessor(entry.revision),
+    to = entry.revision,
+    loading = true,
+  }
+  local full_bufnr, winid = diff_buffer.open(view)
+  local ok, process = pcall(revision_diff.collect, view_state.request, entry.revision, function(diff, err)
+    if not vim.api.nvim_buf_is_valid(full_bufnr) then
       return
     end
-    local filetype = vim.filetype.match({ filename = view_state.target_path }) or "text"
-    show_output(("cvs://revision/%s/%s"):format(view_state.target_path, entry.revision), filetype, result.stdout)
+    diff_buffer.clear_process(full_bufnr)
+    view.loading = false
+    view.error = err
+    view.parsed = diff and diff.parsed
+    diff_buffer.update(full_bufnr, view)
   end)
+  if not ok then
+    view.loading = false
+    view.error = tostring(process)
+    diff_buffer.update(full_bufnr, view)
+  else
+    diff_buffer.set_process(full_bufnr, process)
+  end
+  return full_bufnr, winid
 end
 
-function M.diff_revision(bufnr)
-  local view_state, entry = selected(bufnr)
-  if not entry then
-    return nil
-  end
-  local previous = parse.predecessor(entry.revision)
-  if not previous then
-    util.notify(("Revision %s has no predecessor."):format(entry.revision), vim.log.levels.WARN)
-    return nil
-  end
-  local command = cmd.revision_diff({ path = view_state.request.path, from = previous, to = entry.revision })
-  return runner.run(command, { cwd = view_state.request.cwd, timeout = false }, function(result)
-    -- cvs diff returns 1 when revisions differ; 2+ indicates failure.
-    if result.code > 1 or (result.signal or 0) ~= 0 or (#result.stdout == 0 and #result.stderr > 0) then
-      util.notify(result.stderr[1] or ("CVS diff failed with code %d"):format(result.code), vim.log.levels.ERROR)
-      return
-    end
-    show_output(("cvs://revision-diff/%s/%s..%s"):format(view_state.target_path, previous, entry.revision),
-      "diff", #result.stdout > 0 and result.stdout or { "No differences." })
-  end)
-end
+M.diff_revision = M.open_revision
 
 return M
