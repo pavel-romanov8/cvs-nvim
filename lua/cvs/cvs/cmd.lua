@@ -82,6 +82,12 @@ function M.log(opts)
   return add_files(cmd, opts or {})
 end
 
+function M.revision_diff(opts)
+  local cmd = base()
+  vim.list_extend(cmd, { "diff", "-u", "-r", opts.from, "-r", opts.to })
+  return add_files(cmd, opts)
+end
+
 function M.annotate(opts)
   local cmd = base()
   table.insert(cmd, "annotate")

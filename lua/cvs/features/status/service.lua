@@ -1042,6 +1042,20 @@ function M.diff_current(bufnr)
   })
 end
 
+function M.log_current(bufnr)
+  local attachment = state.get_buffer(bufnr)
+  if not attachment or attachment.kind ~= "status" then
+    return nil
+  end
+  local item = require("cvs.features.status.buffer").get_current_item(bufnr)
+  if not item or item.status == "unknown" or item.status == "backup" or item.status == "added" then
+    return nil
+  end
+  return require("cvs.features.log.service").open({
+    path = resolve_target_path(attachment.view_state.workspace, item.path),
+  })
+end
+
 function M.toggle_inline_diff(bufnr)
   local attachment, view_state = get_attachment(bufnr)
   if not attachment then

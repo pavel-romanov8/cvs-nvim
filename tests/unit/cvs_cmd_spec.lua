@@ -73,6 +73,10 @@ return function()
   local annotate_cmd = cmd.annotate({ path = "pkg/file.lua", revision = "1.7" })
   assert_eq(table.concat(annotate_cmd, " "), "cvs -f annotate -r 1.7 pkg/file.lua", "annotate pins the revision")
 
+  assert_eq(table.concat(cmd.log({ path = "file.lua" }), " "), "cvs -f log file.lua", "log command targets a file")
+  assert_eq(table.concat(cmd.revision_diff({ path = "file.lua", from = "1.2", to = "1.3" }), " "),
+    "cvs -f diff -u -r 1.2 -r 1.3 file.lua", "historical diff pins both revisions")
+
   local base_cmd = cmd.base({ path = "file.lua", revision = "1.7" })
   assert_eq(
     table.concat(base_cmd, " "),

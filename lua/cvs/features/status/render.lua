@@ -181,7 +181,7 @@ function M.lines(view_state)
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "o/gO/O/p opens in a matching split/vsplit/tab/preview"
   highlight(highlights, #lines, "CvsMuted")
-  lines[#lines + 1] = "dd diffs the current file against its CVS base"
+  lines[#lines + 1] = "dd diffs the current file against its CVS base; gl opens its history"
   highlight(highlights, #lines, "CvsMuted")
   lines[#lines + 1] = "= toggles the inline diff"
   highlight(highlights, #lines, "CvsMuted")

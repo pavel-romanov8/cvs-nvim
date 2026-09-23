@@ -47,6 +47,7 @@ local defaults = {
     },
     log = {
       kind = "tab",
+      preview_lines = 200,
     },
     annotate = {
       kind = "left_vsplit",

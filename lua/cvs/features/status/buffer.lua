@@ -285,6 +285,14 @@ function M.open(view_state, opts)
     },
     {
       mode = "n",
+      lhs = "gl",
+      rhs = function()
+        require("cvs.features.status.service").log_current(bufnr)
+      end,
+      desc = "Show CVS file history",
+    },
+    {
+      mode = "n",
       lhs = "=",
       rhs = function()
         actions.toggle_inline_diff(bufnr)

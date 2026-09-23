@@ -17,6 +17,10 @@
   - Companion annotate view for the current file.
   - Considered finished for now.
 
+- `:CvsLog`
+  - File history with toggleable inline revision contents, full revision browsing, and predecessor diffs.
+  - Considered finished for the file-history workflow.
+
 ### Existing, But Not Good Enough Yet
 
 - `:CvsAdd`
@@ -36,9 +40,6 @@
   - Not in a good final shape yet.
 
 ### Partial Or Still Scaffolded
-
-- `:CvsLog`
-  - Command exists, but the real history/log workflow is not done.
 
 - `:CvsConflicts`
   - Conflict detection exists.
@@ -61,7 +62,6 @@
 1. Revisit `:CvsAnnotate` for polish after the main workflow is in place.
 2. Revisit `:CvsRemove` and `:CvsCommit` after the main workflow is stable.
 3. Finish the partial / scaffolded features:
-   - `:CvsLog`
    - `:CvsConflicts`
    - picker integration
    - signs integration
