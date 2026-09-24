@@ -21,6 +21,12 @@ local defaults = {
     syntax_highlighting = true,
     preserve_syntax_colors = true,
   },
+  log = {
+    repository = {
+      days = 30,
+      max_commits = 200,
+    },
+  },
   ui = {
     default_kind = "tab",
     floating = {

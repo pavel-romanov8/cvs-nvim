@@ -145,9 +145,10 @@ COMMANDS                                                        *cvs-commands*
             :CvsLog src/module/
             :CvsLog .
 <
-        Use :CvsLog! to open the complete detected workspace history regardless
-        of the currently focused file or directory. This is the fastest route
-        to a recent project commit when its ID is not already known.
+        Use :CvsLog! to open history for the complete detected workspace scope
+        regardless of the currently focused file or directory. This is the
+        fastest route to a recent project commit when its ID is not already
+        known.
 
         CVS-backed status buffers resolve to their configured scope or workspace.
         From |:Cvs|,
@@ -165,8 +166,12 @@ COMMANDS                                                        *cvs-commands*
         commit ID. Press = on a commit to expand or collapse its affected
         files, then d on a file for its revision diff. Revisions without a
         commit ID remain separate rather than being guessed from timestamps or
-        messages. Project and large-directory logs can be expensive on CVS;
-        loading is asynchronous and diffs are requested only when opened.
+        messages. To avoid downloading the entire repository history, directory
+        logs ask the server for the last 30 days by default, omit symbolic-name
+        lists, suppress files with no matching revisions, and render at most 200
+        grouped commits. The active bounds are shown at the top of the buffer.
+        Press L to double both bounds and query an older range. File-local logs
+        remain unlimited.
 
         In either form, yc copies the selected shared commit ID into the
         unnamed register and cr opens a complete revert plan for it. Press R
@@ -229,6 +234,12 @@ configured through setup():
         syntax_highlighting = true,
         preserve_syntax_colors = true,
       },
+      log = {
+        repository = {
+          days = 30,
+          max_commits = 200,
+        },
+      },
       ui = {
         status = {
           kind = "vsplit",
@@ -237,6 +248,13 @@ configured through setup():
       },
     })
 <
+Directory-scoped |:CvsLog| queries are limited to the last 30 days and 200
+commits by default. Set log.repository.days or log.repository.max_commits to a
+different positive number; 0 disables that bound. The day limit is applied by
+`cvs rlog -d` on the server and therefore provides the main performance gain.
+The commit limit additionally bounds rendering and retained parsed data. Press
+L in a directory log to double the current limits for that buffer.
+
 The inline |:CvsLog| revision diff is limited to 200 diff lines by default.
 Set ui.log.preview_lines to another positive number, or 0 for no line limit.
 The <CR> full-diff view is unaffected by this setting (but uses the general

@@ -1,5 +1,6 @@
 local capabilities = require("cvs.cvs.capabilities")
 local cmd = require("cvs.cvs.cmd")
+local config = require("cvs.config")
 local context = require("cvs.cvs.context")
 local errors = require("cvs.core.errors")
 local parse = require("cvs.features.log.parse")
@@ -30,6 +31,47 @@ local function relative_to(root, path)
     return path:sub(#prefix + 1)
   end
   return path
+end
+
+local function repository_limits(opts)
+  local defaults = config.get().log.repository
+  local days = tonumber(opts.repository_days)
+  local max_commits = tonumber(opts.repository_max_commits)
+  days = math.max(0, math.floor(days or defaults.days or 0))
+  max_commits = math.max(0, math.floor(max_commits or defaults.max_commits or 0))
+  return days, max_commits
+end
+
+local function repository_command(request, days)
+  local date_range
+  if days > 0 then
+    local cutoff = os.date("!%Y-%m-%d %H:%M:%S UTC", os.time() - (days * 86400))
+    date_range = ">" .. cutoff
+  end
+  return cmd.rlog({
+    path = request.path,
+    no_tags = true,
+    suppress_empty = date_range ~= nil,
+    date_range = date_range,
+  })
+end
+
+local function limit_commits(parsed, max_commits)
+  parsed.total_commits = #parsed.commits
+  if max_commits > 0 and #parsed.commits > max_commits then
+    local visible = {}
+    for index = 1, max_commits do
+      visible[index] = parsed.commits[index]
+    end
+    parsed.commits = visible
+    parsed.truncated = true
+  else
+    parsed.truncated = false
+  end
+  -- The grouped commits own all data needed by the UI. Dropping the parallel
+  -- per-file parse tree also releases revisions hidden by max_commits.
+  parsed.files = nil
+  return parsed
 end
 
 local function context_path(opts)
@@ -98,15 +140,18 @@ local function prepare(opts)
   local command
   local parsed
   local repository_scope
+  local repository_days
+  local repository_max_commits
   if is_directory then
     local relative_scope = relative_to(workspace.root_dir, path)
     repository_scope = workspace.repository
     if relative_scope ~= "." then
       repository_scope = util.path_join(repository_scope, relative_scope)
     end
+    repository_days, repository_max_commits = repository_limits(opts)
     request = { cwd = workspace.root_dir, path = repository_scope }
-    command = cmd.rlog(request)
-    parsed = { files = {}, commits = {} }
+    command = repository_command(request, repository_days)
+    parsed = { files = {}, commits = {}, total_commits = 0 }
   else
     request = { cwd = vim.fs.dirname(path), path = vim.fs.basename(path) }
     command = cmd.log(request)
@@ -119,6 +164,8 @@ local function prepare(opts)
     scope_path = path,
     scope_label = relative_to(workspace.root_dir, path),
     repository_scope = repository_scope,
+    repository_days = repository_days,
+    repository_max_commits = repository_max_commits,
     target_path = is_directory and nil or path,
     request = request,
     command = command,
@@ -158,10 +205,10 @@ local function load(bufnr, view_state)
       view_state.error = result.stderr[1] or result.stdout[1] or ("CVS log exited with code %d"):format(result.code)
     else
       if view_state.scope_kind == "directory" then
-        view_state.parsed = parse.parse_scope(result.stdout, {
+        view_state.parsed = limit_commits(parse.parse_scope(result.stdout, {
           scope_path = view_state.scope_path,
           logging_prefix = view_state.repository_scope,
-        })
+        }), view_state.repository_max_commits)
         for _, commit in ipairs(view_state.parsed.commits) do
           for _, file in ipairs(commit.files) do
             file.path = relative_to(view_state.workspace.root_dir, file.absolute_path)
@@ -204,6 +251,32 @@ function M.refresh(bufnr)
     return nil
   end
   return load(bufnr, attachment.view_state)
+end
+
+function M.load_older(bufnr)
+  local attachment = state.get_buffer(bufnr)
+  if not attachment or attachment.kind ~= "log" then
+    return nil
+  end
+  local view_state = attachment.view_state
+  if view_state.scope_kind ~= "directory" then
+    return nil
+  end
+  local changed = false
+  if view_state.repository_days > 0 then
+    view_state.repository_days = view_state.repository_days * 2
+    changed = true
+  end
+  if view_state.repository_max_commits > 0 then
+    view_state.repository_max_commits = view_state.repository_max_commits * 2
+    changed = true
+  end
+  if not changed then
+    util.notify("The complete repository history is already enabled.")
+    return nil
+  end
+  view_state.command = repository_command(view_state.request, view_state.repository_days)
+  return load(bufnr, view_state)
 end
 
 local function selected(bufnr)

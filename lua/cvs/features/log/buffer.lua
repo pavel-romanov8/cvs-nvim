@@ -61,6 +61,9 @@ function M.open(view_state, opts)
     { mode = "n", lhs = "R", rhs = function()
       require("cvs.features.log.service").refresh(bufnr)
     end, desc = "Refresh CVS history" },
+    { mode = "n", lhs = "L", rhs = function()
+      require("cvs.features.log.service").load_older(bufnr)
+    end, desc = "Load an older CVS history range" },
     { mode = "n", lhs = "<CR>", rhs = function()
       require("cvs.features.log.service").open_revision(bufnr)
     end, desc = "Open CVS revision diff" },

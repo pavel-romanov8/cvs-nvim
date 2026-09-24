@@ -89,9 +89,19 @@ function M.log(opts)
 end
 
 function M.rlog(opts)
+  opts = opts or {}
   local cmd = base()
   table.insert(cmd, "rlog")
-  return add_files(cmd, opts or {})
+  if opts.no_tags then
+    table.insert(cmd, "-N")
+  end
+  if opts.suppress_empty then
+    table.insert(cmd, "-S")
+  end
+  if opts.date_range and opts.date_range ~= "" then
+    vim.list_extend(cmd, { "-d", opts.date_range })
+  end
+  return add_files(cmd, opts)
 end
 
 function M.revision_diff(opts)

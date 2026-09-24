@@ -14,8 +14,17 @@ local function scope_lines(view_state)
   local lines = {
     "CVS commit history",
     "Scope: " .. view_state.scope_path,
-    "",
   }
+  local limits = {}
+  if (view_state.repository_days or 0) > 0 then
+    limits[#limits + 1] = ("last %d days"):format(view_state.repository_days)
+  end
+  if (view_state.repository_max_commits or 0) > 0 then
+    local count = view_state.repository_max_commits
+    limits[#limits + 1] = ("up to %d commit%s"):format(count, count == 1 and "" or "s")
+  end
+  lines[#lines + 1] = #limits > 0 and ("Range: " .. table.concat(limits, ", ")) or "Range: complete history"
+  lines[#lines + 1] = ""
   local row_map = {}
   local highlights = {}
 
@@ -26,7 +35,14 @@ local function scope_lines(view_state)
   elseif #view_state.parsed.commits == 0 then
     lines[#lines + 1] = "No commits found."
   else
-    lines[#lines + 1] = ("Commits: %d"):format(#view_state.parsed.commits)
+    if view_state.parsed.truncated then
+      lines[#lines + 1] = ("Commits: %d shown of %d matching commits"):format(
+        #view_state.parsed.commits,
+        view_state.parsed.total_commits
+      )
+    else
+      lines[#lines + 1] = ("Commits: %d"):format(#view_state.parsed.commits)
+    end
     for _, commit in ipairs(view_state.parsed.commits) do
       lines[#lines + 1] = ""
       local id = commit.id or "(no commit ID)"
@@ -52,7 +68,7 @@ local function scope_lines(view_state)
   end
 
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "= toggle files  d diff file  yc copy commit ID  cr revert commit  R refresh  q close"
+  lines[#lines + 1] = "= toggle files  d diff file  yc copy commit ID  cr revert commit  L load older  R refresh  q close"
   return lines, row_map, highlights, {}
 end
 

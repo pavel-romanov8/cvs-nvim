@@ -76,6 +76,13 @@ return function()
   assert_eq(table.concat(cmd.log({ path = "file.lua" }), " "), "cvs -f log file.lua", "log command targets a file")
   assert_eq(table.concat(cmd.rlog({ path = "project/pkg" }), " "), "cvs -f rlog project/pkg",
     "repository log targets a module or subtree")
+  assert_eq(table.concat(cmd.rlog({
+    path = "project",
+    no_tags = true,
+    suppress_empty = true,
+    date_range = ">2026-01-01 00:00:00 UTC",
+  }), " "), "cvs -f rlog -N -S -d >2026-01-01 00:00:00 UTC project",
+    "repository log can filter old revisions and empty file headers at the server")
   assert_eq(table.concat(cmd.revision_diff({ path = "file.lua", from = "1.2", to = "1.3" }), " "),
     "cvs -f diff -u -r 1.2 -r 1.3 file.lua", "historical diff pins both revisions")
 
