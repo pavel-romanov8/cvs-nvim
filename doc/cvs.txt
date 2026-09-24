@@ -134,6 +134,10 @@ COMMANDS                                                        *cvs-commands*
                                                         *:CvsLog*
 :CvsLog [path]
         Open the file's CVS revision history (or history of the given file).
+        Like |:Cvs|, the log opens in a half-height horizontal split by
+        default. Use :vertical CvsLog, :belowright CvsLog, or :tab CvsLog to
+        override the layout for one invocation. Configure ui.log.kind,
+        ui.log.height, or ui.log.width to change its default layout.
         The log loads asynchronously. Each revision shows its date, author,
         state, line counts, tags, and commit message. Press = on a revision
         to expand/collapse its highlighted diff against its predecessor inline
@@ -187,7 +191,13 @@ configured through setup():
 The inline |:CvsLog| revision diff is limited to 200 diff lines by default.
 Set ui.log.preview_lines to another positive number, or 0 for no line limit.
 The <CR> full-diff view is unaffected by this setting (but uses the general
-|:CvsDiff| output limits).
+|:CvsDiff| output limits). With a Tree-sitter parser and highlight query for
+its source filetype, the log overlays source-language foreground colors on
+both old and new diff lines while preserving diff backgrounds. Highlighting
+runs only for the opened diff, after it loads, and is bounded to the first
+1000 diff lines, 256 KiB, 32 hunks, and 8000 captures. Remaining lines, or
+files without an available parser, retain regular diff colors. Set
+diff.syntax_highlighting to false to disable source colors in the log.
 
 CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.

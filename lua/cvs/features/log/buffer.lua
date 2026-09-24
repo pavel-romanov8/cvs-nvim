@@ -1,15 +1,17 @@
 local state = require("cvs.core.state")
 local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
+local source_syntax = require("cvs.features.log.source_syntax")
 
 local M = {}
 local namespace = vim.api.nvim_create_namespace("cvs-log")
 
 local function render(bufnr, view_state)
-  local lines, row_map, highlights = require("cvs.features.log.render").lines(view_state)
+  local lines, row_map, highlights, syntax_rows = require("cvs.features.log.render").lines(view_state)
   ui_buffer.set_lines(bufnr, lines)
   ui_buffer.lock(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+  require("cvs.ui.highlights").setup()
   vim.api.nvim_buf_add_highlight(bufnr, namespace, "CvsHeader", 0, 0, -1)
   for row, line in ipairs(lines) do
     if line:match("^revision [%d.]+") then
@@ -17,7 +19,13 @@ local function render(bufnr, view_state)
     end
   end
   for _, highlight in ipairs(highlights) do
-    vim.api.nvim_buf_add_highlight(bufnr, namespace, highlight.group, highlight.row - 1, 6, -1)
+    vim.api.nvim_buf_set_extmark(bufnr, namespace, highlight.row - 1, 6, {
+      end_col = #lines[highlight.row], hl_group = highlight.group, priority = 100,
+    })
+  end
+  local inline = view_state.inline
+  if inline and inline.syntax then
+    source_syntax.apply(bufnr, namespace, inline.syntax, syntax_rows, 7)
   end
   local attachment = state.get_buffer(bufnr)
   if attachment then
@@ -78,9 +86,12 @@ function M.open(view_state, opts)
       state.detach_buffer(bufnr)
     end,
   })
+  local log_config = require("cvs.config").get().ui.log
   return bufnr, window.open(bufnr, {
-    kind = opts.kind or require("cvs.config").get().ui.log.kind,
+    kind = opts.kind or log_config.kind,
     position = opts.position,
+    height = opts.height or log_config.height,
+    width = opts.width or log_config.width,
   })
 end
 

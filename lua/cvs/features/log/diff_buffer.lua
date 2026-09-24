@@ -1,9 +1,11 @@
 local runner = require("cvs.cvs.runner")
 local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
+local source_syntax = require("cvs.features.log.source_syntax")
 
 local M = {}
 local processes = {}
+local namespace = vim.api.nvim_create_namespace("cvs-log-full-syntax")
 
 local function lines(view)
   local title = ("CVS diff: %s  %s -> %s"):format(
@@ -34,6 +36,28 @@ function M.update(bufnr, view)
   end
   ui_buffer.set_lines(bufnr, lines(view))
   ui_buffer.lock(bufnr)
+  vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+  if not view.parsed then return end
+  require("cvs.ui.highlights").setup()
+  for row, line in ipairs(view.parsed.lines) do
+    local group
+    if line:match("^@@") then group = "CvsDiffChange"
+    elseif line:match("^%+") then group = "CvsDiffAdd"
+    elseif line:match("^%-") then group = "CvsDiffDelete" end
+    if group then
+      vim.api.nvim_buf_set_extmark(bufnr, namespace, row + 1, 0, {
+        end_col = #line, hl_group = group, priority = 100,
+      })
+    end
+  end
+  if require("cvs.config").get().diff.syntax_highlighting ~= false then
+    local parsed = view.parsed
+    vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(bufnr) or view.parsed ~= parsed then return end
+      local tokens = source_syntax.captures(parsed.lines, view.path)
+      source_syntax.apply(bufnr, namespace, tokens, function(row) return row + 2 end, 1)
+    end)
+  end
 end
 
 function M.open(view)

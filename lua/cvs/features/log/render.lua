@@ -8,6 +8,7 @@ function M.lines(view_state)
   }
   local row_map = {}
   local highlights = {}
+  local syntax_rows = {}
 
   if view_state.loading then
     lines[#lines + 1] = "Loading CVS log..."
@@ -59,16 +60,19 @@ function M.lines(view_state)
         else
           preview = inline.lines
         end
-        for _, content in ipairs(preview) do
+        for index, content in ipairs(preview) do
           lines[#lines + 1] = "    | " .. content
           row_map[#lines] = entry
+          if not inline.loading and not inline.error then
+            syntax_rows[index] = #lines
+          end
           local group
           if content:match("^@@") then
-            group = "DiffChange"
+            group = "CvsDiffChange"
           elseif content:match("^%+") then
-            group = "DiffAdd"
+            group = "CvsDiffAdd"
           elseif content:match("^%-") then
-            group = "DiffDelete"
+            group = "CvsDiffDelete"
           elseif not inline.loading and not inline.error then
             group = "CvsMuted"
           end
@@ -92,7 +96,7 @@ function M.lines(view_state)
 
   lines[#lines + 1] = ""
   lines[#lines + 1] = "= toggle inline diff  <CR>/d open full diff  R refresh  q close"
-  return lines, row_map, highlights
+  return lines, row_map, highlights, syntax_rows
 end
 
 return M

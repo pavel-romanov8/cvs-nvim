@@ -8,6 +8,7 @@ local state = require("cvs.core.state")
 local util = require("cvs.core.util")
 local revision_diff = require("cvs.features.log.diff")
 local diff_buffer = require("cvs.features.log.diff_buffer")
+local source_syntax = require("cvs.features.log.source_syntax")
 
 local M = {}
 
@@ -154,6 +155,14 @@ function M.toggle_preview(bufnr)
       inline.truncated = diff.parsed.truncated or #diff.parsed.lines > count
     end
     require("cvs.features.log.buffer").update(bufnr, view_state)
+    if not err and require("cvs.config").get().diff.syntax_highlighting ~= false then
+      vim.schedule(function()
+        local latest = state.get_buffer(bufnr)
+        if not latest or latest.preview_token ~= token then return end
+        inline.syntax = source_syntax.captures(inline.lines, view_state.target_path)
+        require("cvs.features.log.buffer").update(bufnr, view_state)
+      end)
+    end
   end)
   if not ok then
     inline.loading = false

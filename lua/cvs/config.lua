@@ -46,7 +46,9 @@ local defaults = {
       kind = "tab",
     },
     log = {
-      kind = "tab",
+      kind = "split",
+      height = 0.5,
+      width = 0.5,
       preview_lines = 200,
     },
     annotate = {
