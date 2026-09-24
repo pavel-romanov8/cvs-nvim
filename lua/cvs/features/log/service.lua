@@ -8,7 +8,7 @@ local state = require("cvs.core.state")
 local util = require("cvs.core.util")
 local revision_diff = require("cvs.features.log.diff")
 local diff_buffer = require("cvs.features.log.diff_buffer")
-local source_syntax = require("cvs.features.log.source_syntax")
+local source_syntax = require("cvs.features.diff.source_syntax")
 
 local M = {}
 

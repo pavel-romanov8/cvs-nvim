@@ -43,7 +43,9 @@ COMMANDS                                                        *cvs-commands*
         Press dd for a full side-by-side diff against the
         checked-out revision,
         or = on a modified, added, or unknown file to toggle unified hunks
-        inline. Press gl on a tracked file to open its revision history.
+        inline. Inline diffs also show source-language syntax colors when a
+        Tree-sitter parser is installed, without replacing diff backgrounds.
+        Press gl on a tracked file to open its revision history.
         Added and unknown files are shown as entirely new content
         against an empty base. Press - on a file,
         visual range, or section heading to toggle the commit selection. Press
@@ -192,12 +194,13 @@ The inline |:CvsLog| revision diff is limited to 200 diff lines by default.
 Set ui.log.preview_lines to another positive number, or 0 for no line limit.
 The <CR> full-diff view is unaffected by this setting (but uses the general
 |:CvsDiff| output limits). With a Tree-sitter parser and highlight query for
-its source filetype, the log overlays source-language foreground colors on
-both old and new diff lines while preserving diff backgrounds. Highlighting
-runs only for the opened diff, after it loads, and is bounded to the first
+its source filetype, both the log and status inline diffs overlay
+source-language foreground colors on old and new lines while preserving diff
+backgrounds. Highlighting runs only for the opened diff, after it loads, and
+is bounded to the first
 1000 diff lines, 256 KiB, 32 hunks, and 8000 captures. Remaining lines, or
 files without an available parser, retain regular diff colors. Set
-diff.syntax_highlighting to false to disable source colors in the log.
+diff.syntax_highlighting to false to disable source colors in these views.
 
 CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.

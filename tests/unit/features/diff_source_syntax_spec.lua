@@ -1,4 +1,4 @@
-local syntax = require("cvs.features.log.source_syntax")
+local syntax = require("cvs.features.diff.source_syntax")
 
 return function()
   local diff = {
@@ -40,7 +40,7 @@ return function()
   local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
   local found = false
   for _, mark in ipairs(marks) do
-    if mark[2] == 1 and mark[3] == 1 and mark[4].hl_group == "CvsLogSyntaxkeyword_lua" then
+    if mark[2] == 1 and mark[3] == 1 and mark[4].hl_group == "CvsDiffSyntaxkeyword_lua" then
       local hl = vim.api.nvim_get_hl(0, { name = mark[4].hl_group, link = false })
       assert(hl.bg == nil, "source syntax groups preserve diff backgrounds")
       found = true

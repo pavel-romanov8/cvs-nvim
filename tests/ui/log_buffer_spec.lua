@@ -65,7 +65,7 @@ return function(root)
       local full_ns = vim.api.nvim_create_namespace("cvs-log-full-syntax")
       assert(vim.wait(500, function()
         for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(full_buf, full_ns, 0, -1, { details = true })) do
-          if mark[4].hl_group == "CvsLogSyntaxkeyword_lua" then return true end
+          if mark[4].hl_group == "CvsDiffSyntaxkeyword_lua" then return true end
         end
       end), "full diff receives source-language syntax highlights")
     end
@@ -88,7 +88,7 @@ return function(root)
     if has_lua_parser then
       assert(vim.wait(500, function()
         for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, vim.api.nvim_create_namespace("cvs-log"), 0, -1, { details = true })) do
-          if mark[4].hl_group == "CvsLogSyntaxkeyword_lua" and mark[3] == 7 then return true end
+          if mark[4].hl_group == "CvsDiffSyntaxkeyword_lua" and mark[3] == 7 then return true end
         end
       end), "inline diff receives source-language syntax past UI and diff prefixes")
     end

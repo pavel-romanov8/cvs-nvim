@@ -150,8 +150,8 @@ return function()
       parsed = {
         lines = {
           "@@ -1 +1 @@",
-          "-old",
-          "+changed",
+          "-local old = 1",
+          "+local changed = 2",
         },
       },
     }, nil)
@@ -164,7 +164,16 @@ return function()
   assert_eq(diff_path, temp_dir .. "/changed.lua", "inline diff requests the selected file")
   local status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) ~= nil, "inline diff renders its hunk")
-  assert_true(status_text:find("   +changed", 1, true) ~= nil, "inline diff renders added lines")
+  assert_true(status_text:find("   +local changed = 2", 1, true) ~= nil, "inline diff renders added lines")
+  if pcall(vim.treesitter.get_string_parser, "local x = 1", "lua")
+    and vim.treesitter.query.get("lua", "highlights") then
+    local ns = vim.api.nvim_create_namespace("cvs-status")
+    assert_true(vim.wait(500, function()
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })) do
+        if mark[4].hl_group == "CvsDiffSyntaxkeyword_lua" and mark[3] == 4 then return true end
+      end
+    end), "status inline diff receives source syntax after diff prefix")
+  end
 
   local modified_row = find_line(bufnr, "M  changed.lua")
   local diff_row = find_line(bufnr, "@@ -1 +1 @@")
@@ -209,11 +218,24 @@ return function()
   assert_true(status_text:find("   @@ -1 +1 @@", 1, true) == nil, "inline diff collapses on the second toggle")
 
   added_row = find_line(bufnr, "A  new.lua")
+  vim.fn.writefile({ "local value = 1" }, temp_dir .. "/new.lua")
   vim.api.nvim_win_set_cursor(winid, { added_row, 0 })
   service.toggle_inline_diff(bufnr)
   status_text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   assert_true(status_text:find("   @@ -0,0 +1 @@", 1, true) ~= nil, "added file renders against an empty base")
-  assert_true(status_text:find("   +new", 1, true) ~= nil, "added file renders all content as additions")
+  assert_true(status_text:find("   +local value = 1", 1, true) ~= nil, "added file renders all content as additions")
+  if pcall(vim.treesitter.get_string_parser, "local x = 1", "lua")
+    and vim.treesitter.query.get("lua", "highlights") then
+    local added_diff_row = find_line(bufnr, "   +local value = 1")
+    local ns = vim.api.nvim_create_namespace("cvs-status")
+    assert_true(vim.wait(500, function()
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })) do
+        if mark[2] == added_diff_row - 1 and mark[3] == 4
+          and mark[4].hl_group == "CvsDiffSyntaxkeyword_lua" then return true end
+      end
+    end), "new-file inline diff receives source syntax")
+  end
+  vim.fn.writefile({ "new" }, temp_dir .. "/new.lua")
 
   local unknown_row = find_line(bufnr, "?  unknown-one.lua")
   vim.api.nvim_win_set_cursor(winid, { unknown_row, 0 })

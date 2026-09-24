@@ -91,7 +91,7 @@ local function foreground_group(capture, lang)
     hl = vim.api.nvim_get_hl(0, { name = "@" .. capture, link = false })
   end
   if not hl.fg and not hl.ctermfg then return nil end
-  local name = "CvsLogSyntax" .. key:gsub("[^%w]", "_")
+  local name = "CvsDiffSyntax" .. key:gsub("[^%w]", "_")
   vim.api.nvim_set_hl(0, name, {
     fg = hl.fg, ctermfg = hl.ctermfg, bold = hl.bold, italic = hl.italic,
     underline = hl.underline, undercurl = hl.undercurl,
@@ -101,7 +101,7 @@ local function foreground_group(capture, lang)
 end
 
 vim.api.nvim_create_autocmd("ColorScheme", {
-  group = vim.api.nvim_create_augroup("CvsLogSyntax", { clear = true }),
+  group = vim.api.nvim_create_augroup("CvsDiffSyntax", { clear = true }),
   callback = function()
     local previous = vim.tbl_keys(groups)
     groups = {}

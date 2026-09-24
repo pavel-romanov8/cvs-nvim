@@ -1151,11 +1151,24 @@ function M.toggle_inline_diff(bufnr)
       return
     end
 
-    current_state.inline_diff = {
+    local finished_inline = {
       path = item.path,
       lines = lines,
     }
+    current_state.inline_diff = finished_inline
     update_view(bufnr, current_state)
+
+    if require("cvs.config").get().diff.syntax_highlighting ~= false and #(parsed.lines or {}) > 0 then
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(bufnr) then return end
+        local latest, latest_state = get_attachment(bufnr)
+        if not latest or latest_state.inline_diff ~= finished_inline then return end
+        local syntax = require("cvs.features.diff.source_syntax").captures(lines, target)
+        if #syntax == 0 then return end
+        finished_inline.syntax = syntax
+        update_view(bufnr, latest_state)
+      end)
+    end
   end)
 
   request.process = process

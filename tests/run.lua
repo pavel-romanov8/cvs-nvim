@@ -7,7 +7,7 @@ local tests = {
   "tests/unit/cvs_cmd_spec.lua",
   "tests/unit/cvs_entries_spec.lua",
   "tests/unit/features/log_parse_spec.lua",
-  "tests/unit/features/log_source_syntax_spec.lua",
+  "tests/unit/features/diff_source_syntax_spec.lua",
   "tests/unit/features/annotate_parse_spec.lua",
   "tests/unit/features/annotate_mapping_spec.lua",
   "tests/unit/features/annotate_render_spec.lua",

@@ -1,7 +1,7 @@
 local runner = require("cvs.cvs.runner")
 local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
-local source_syntax = require("cvs.features.log.source_syntax")
+local source_syntax = require("cvs.features.diff.source_syntax")
 
 local M = {}
 local processes = {}

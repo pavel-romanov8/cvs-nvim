@@ -82,25 +82,26 @@ local function summary_line(counts)
   return ("State Counts: %s"):format(table.concat(parts, ", "))
 end
 
-local function append_inline_diff(lines, row_map, highlights, item, inline_diff)
+local function append_inline_diff(lines, row_map, highlights, syntax_rows, item, inline_diff)
   if not inline_diff or inline_diff.path ~= item.path then
     return
   end
 
-  for _, diff_line in ipairs(inline_diff.lines or {}) do
+  for index, diff_line in ipairs(inline_diff.lines or {}) do
     local row = #lines + 1
     lines[row] = "   " .. diff_line
+    syntax_rows[index] = row
     row_map[row] = {
       kind = "file",
       item = item,
     }
 
     if vim.startswith(diff_line, "@@") then
-      highlight(highlights, row, "DiffChange", 3, -1)
+      highlight(highlights, row, "CvsDiffChange", 3, -1)
     elseif vim.startswith(diff_line, "+") and not vim.startswith(diff_line, "+++") then
-      highlight(highlights, row, "DiffAdd", 3, -1)
+      highlight(highlights, row, "CvsDiffAdd", 3, -1)
     elseif vim.startswith(diff_line, "-") and not vim.startswith(diff_line, "---") then
-      highlight(highlights, row, "DiffDelete", 3, -1)
+      highlight(highlights, row, "CvsDiffDelete", 3, -1)
     else
       highlight(highlights, row, "CvsMuted", 3, -1)
     end
@@ -111,6 +112,7 @@ function M.lines(view_state)
   local lines = { "CVS" }
   local row_map = {}
   local highlights = {}
+  local syntax_rows = {}
   highlight(highlights, 1, "CvsHeader")
 
   lines[#lines + 1] = ""
@@ -171,7 +173,7 @@ function M.lines(view_state)
           item = item,
         }
         highlight(highlights, row, status_highlights[item.status] or "Type", 4, #item.code + 5)
-        append_inline_diff(lines, row_map, highlights, item, view_state.inline_diff)
+        append_inline_diff(lines, row_map, highlights, syntax_rows, item, view_state.inline_diff)
       end
     end
   end
@@ -202,7 +204,7 @@ function M.lines(view_state)
   lines[#lines + 1] = "q closes this buffer"
   highlight(highlights, #lines, "CvsMuted")
 
-  return lines, row_map, highlights
+  return lines, row_map, highlights, syntax_rows
 end
 
 return M

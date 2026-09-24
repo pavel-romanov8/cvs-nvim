@@ -2,16 +2,18 @@ local actions = require("cvs.features.status.actions")
 local state = require("cvs.core.state")
 local ui_buffer = require("cvs.ui.buffer")
 local window = require("cvs.ui.window")
+local source_syntax = require("cvs.features.diff.source_syntax")
 
 local M = {}
 local namespace = vim.api.nvim_create_namespace("cvs-status")
 
 local function render(bufnr, view_state)
-  local lines, row_map, highlights = require("cvs.features.status.render").lines(view_state)
+  local lines, row_map, highlights, syntax_rows = require("cvs.features.status.render").lines(view_state)
   view_state.row_map = row_map
   ui_buffer.set_lines(bufnr, lines)
 
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+  require("cvs.ui.highlights").setup()
   for _, item in ipairs(highlights) do
     vim.api.nvim_buf_add_highlight(
       bufnr,
@@ -21,6 +23,10 @@ local function render(bufnr, view_state)
       item.start_col,
       item.end_col
     )
+  end
+  local inline = view_state.inline_diff
+  if inline and inline.syntax then
+    source_syntax.apply(bufnr, namespace, inline.syntax, syntax_rows, 4)
   end
 end
 

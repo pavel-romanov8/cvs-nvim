@@ -13,7 +13,7 @@ local function assert_true(value, message)
 end
 
 return function()
-  local lines, row_map, highlights = render.lines({
+  local lines, row_map, highlights, syntax_rows = render.lines({
     workspace = {
       root_dir = "/tmp/example",
     },
@@ -148,9 +148,11 @@ return function()
   assert_true(groups.CvsStatusModified, "modified file highlight")
   assert_true(groups.CvsStatusAdded, "added file highlight")
   assert_true(groups.CvsStatusMissing, "missing file highlight")
-  assert_true(groups.DiffChange, "inline diff hunk highlight")
-  assert_true(groups.DiffDelete, "inline diff deletion highlight")
-  assert_true(groups.DiffAdd, "inline diff addition highlight")
+  assert_true(groups.CvsDiffChange, "inline diff hunk highlight")
+  assert_true(groups.CvsDiffDelete, "inline diff deletion highlight")
+  assert_true(groups.CvsDiffAdd, "inline diff addition highlight")
+  assert_true(lines[syntax_rows[2]] == "   -local old = true", "source syntax maps deletion rows")
+  assert_true(lines[syntax_rows[3]] == "   +local new = true", "source syntax maps addition rows")
 
   local error_lines = render.lines({
     workspace = { root_dir = "/tmp/example" },
