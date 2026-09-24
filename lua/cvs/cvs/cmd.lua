@@ -46,6 +46,12 @@ function M.discard(opts)
   return add_files(cmd, opts or {})
 end
 
+function M.reverse_merge(opts)
+  local cmd = base()
+  vim.list_extend(cmd, { "update", "-j", opts.from, "-j", opts.to })
+  return add_files(cmd, opts or {})
+end
+
 function M.commit(opts)
   local cmd = base()
   table.insert(cmd, "commit")
@@ -79,6 +85,12 @@ end
 function M.log(opts)
   local cmd = base()
   table.insert(cmd, "log")
+  return add_files(cmd, opts or {})
+end
+
+function M.rlog(opts)
+  local cmd = base()
+  table.insert(cmd, "rlog")
   return add_files(cmd, opts or {})
 end
 

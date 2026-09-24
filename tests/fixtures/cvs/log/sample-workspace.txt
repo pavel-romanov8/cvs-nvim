@@ -1,0 +1,42 @@
+cvs rlog: Logging project
+
+RCS file: /repo/project/file.lua,v
+Working file: file.lua
+head: 1.3
+branch:
+locks: strict
+access list:
+symbolic names:
+keyword substitution: kv
+total revisions: 2; selected revisions: 2
+description:
+----------------------------
+revision 1.3
+date: 2026/01/03 11:22:33;  author: mary;  state: Exp;  lines: +2 -1;  commitid: ABC123;
+Fix a tricky bug.
+----------------------------
+revision 1.2
+date: 2026/01/02 10:00:00;  author: joe;  state: Exp;  lines: +1 -0;  commitid: DEF456;
+Prepare the code.
+=============================================================================
+cvs rlog: Logging project/pkg
+
+RCS file: /repo/project/pkg/helper.lua,v
+Working file: helper.lua
+head: 1.8
+branch:
+locks: strict
+access list:
+symbolic names:
+keyword substitution: kv
+total revisions: 2; selected revisions: 2
+description:
+----------------------------
+revision 1.8
+date: 2026/01/03 11:22:33;  author: mary;  state: Exp;  lines: +4 -0;  commitid: ABC123;
+Fix a tricky bug.
+----------------------------
+revision 1.7
+date: 2026/01/01 09:00:00;  author: joe;  state: Exp;  lines: +1 -1;
+Older independent change.
+=============================================================================

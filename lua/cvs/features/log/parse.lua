@@ -23,7 +23,10 @@ function M.parse(lines)
       in_symbols = false
       in_description = false
     elseif entry then
-      if line:match("^branches:%s*") then
+      local continuation_commit_id = entry.date and line:match("commitid:%s*([^;]+)")
+      if continuation_commit_id then
+        entry.commit_id = trim(continuation_commit_id)
+      elseif line:match("^branches:%s*") then
         entry.branches = trim(line:match("^branches:%s*(.*)"))
       elseif not entry.date then
         local date, author, state = line:match("^date:%s*(.-);%s*author:%s*(.-);%s*state:%s*([^;]+)")
@@ -33,6 +36,10 @@ function M.parse(lines)
           entry.state = trim(state)
           entry.lines = line:match("lines:%s*([^;]+)")
           entry.branches = line:match("branches:%s*([^;]+)")
+          entry.commit_id = trim(line:match("commitid:%s*([^;]+)"))
+          if entry.commit_id == "" then
+            entry.commit_id = nil
+          end
         else
           entry.message[#entry.message + 1] = line
         end
@@ -81,6 +88,145 @@ function M.parse(lines)
   end
 
   return result
+end
+
+local function finish_section(files, section, opts)
+  if not section or #section.lines == 0 then
+    return
+  end
+
+  local parsed = M.parse(section.lines)
+  local working = parsed.header["Working file"]
+  if not working or working == "" then
+    return
+  end
+
+  local logging_dir = section.logging_dir
+  local logging_prefix = opts and opts.logging_prefix
+  local rcs_file = parsed.header["RCS file"]
+  local repository_relative
+  if logging_prefix and rcs_file then
+    local archive = rcs_file:gsub(",v$", ""):gsub("/Attic/", "/")
+    local needle = "/" .. logging_prefix .. "/"
+    local start = archive:find(needle, 1, true)
+    if start then
+      repository_relative = archive:sub(start + #needle)
+    elseif vim.startswith(archive, logging_prefix .. "/") then
+      repository_relative = archive:sub(#logging_prefix + 2)
+    end
+  end
+  if logging_prefix and logging_dir then
+    if logging_dir == logging_prefix then
+      logging_dir = "."
+    elseif vim.startswith(logging_dir, logging_prefix .. "/") then
+      logging_dir = logging_dir:sub(#logging_prefix + 2)
+    end
+  end
+  local relative = repository_relative or working
+  if not repository_relative and logging_dir and logging_dir ~= "." and logging_dir ~= "" then
+    local prefix = logging_dir .. "/"
+    if not vim.startswith(relative, prefix) then
+      relative = prefix .. relative
+    end
+  end
+  relative = vim.fs.normalize(relative)
+
+  local absolute = relative
+  if opts and opts.scope_path then
+    absolute = vim.fs.normalize(opts.scope_path .. "/" .. relative)
+  end
+
+  for _, entry in ipairs(parsed.entries) do
+    entry.path = relative
+    entry.absolute_path = absolute
+  end
+
+  files[#files + 1] = {
+    path = relative,
+    absolute_path = absolute,
+    parsed = parsed,
+  }
+end
+
+-- Parse recursive `cvs log` output and group file revisions by the shared
+-- commitid emitted by modern CVS servers. Entries without a commitid remain
+-- separate; guessing changesets from timestamps or messages would be unsafe.
+function M.parse_scope(lines, opts)
+  opts = opts or {}
+  local files = {}
+  local logging_dir = "."
+  local section
+
+  for _, line in ipairs(lines or {}) do
+    local next_logging_dir = line:match("^cvs%s+r?log:%s+Logging%s+(.+)$")
+      or line:match("^cvs%s+%[[^]]+%]%s+r?log:%s+Logging%s+(.+)$")
+    if next_logging_dir then
+      if section then
+        finish_section(files, section, opts)
+        section = nil
+      end
+      logging_dir = trim(next_logging_dir)
+    elseif line:match("^RCS file:%s*") then
+      if section then
+        finish_section(files, section, opts)
+      end
+      section = { logging_dir = logging_dir, lines = { line } }
+    elseif section then
+      section.lines[#section.lines + 1] = line
+      if line:match("^=+$") then
+        finish_section(files, section, opts)
+        section = nil
+      end
+    end
+  end
+  finish_section(files, section, opts)
+
+  local commits_by_key = {}
+  local commits = {}
+  for _, file in ipairs(files) do
+    for _, entry in ipairs(file.parsed.entries) do
+      local key = entry.commit_id or (file.path .. "@" .. entry.revision)
+      local commit = commits_by_key[key]
+      if not commit then
+        commit = {
+          id = entry.commit_id,
+          key = key,
+          date = entry.date,
+          author = entry.author,
+          message = vim.deepcopy(entry.message or {}),
+          files = {},
+        }
+        commits_by_key[key] = commit
+        commits[#commits + 1] = commit
+      end
+      commit.files[#commit.files + 1] = entry
+    end
+  end
+
+  table.sort(commits, function(left, right)
+    local left_date = left.date or ""
+    local right_date = right.date or ""
+    if left_date == right_date then
+      return left.key > right.key
+    end
+    return left_date > right_date
+  end)
+  for _, commit in ipairs(commits) do
+    table.sort(commit.files, function(left, right)
+      return (left.path or "") < (right.path or "")
+    end)
+  end
+
+  return { files = files, commits = commits }
+end
+
+function M.find_commit(parsed, commit_id)
+  for _, commit in ipairs((parsed and parsed.commits) or {}) do
+    if commit.id == commit_id then
+      return commit
+    end
+  end
+  return nil
 end
 
 -- CVS branch revisions end in their own sequence number. The first commit

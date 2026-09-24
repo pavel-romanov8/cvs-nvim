@@ -57,7 +57,7 @@ local function build_view_state(workspace, opts)
     files = vim.deepcopy(command_opts.files or {}),
     source_bufnr = opts.source_bufnr,
     source_win = opts.source_win,
-    message_lines = { "" },
+    message_lines = vim.deepcopy(opts.message_lines or { "" }),
     messages = {},
   }
 end

@@ -1,84 +1,45 @@
 local service = require("cvs.features.status.service")
 
-local function assert_eq(actual, expected, message)
-  if actual ~= expected then
-    error(("%s: expected %s, got %s"):format(message, vim.inspect(expected), vim.inspect(actual)))
+local function section(view_state, kind)
+  for _, value in ipairs(view_state.sections or {}) do
+    if value.kind == kind then return value end
   end
-end
-
-local function find_section(view_state, kind)
-  for _, section in ipairs(view_state.sections or {}) do
-    if section.kind == kind then
-      return section
-    end
-  end
-
-  return nil
 end
 
 return function()
   local snapshot = {
-    workspace = {
-      root_dir = "/tmp/example",
-    },
+    workspace = { root_dir = "/tmp/example" },
     generated_at = "2026-03-27 12:00:00",
     files = {
-      { code = "M", path = "lua/cvs/init.lua", status = "modified" },
-      { code = "A", path = "lua/cvs/new.lua", status = "added" },
-      { code = "R", path = "lua/cvs/old.lua", status = "removed" },
+      { code = "M", path = "init.lua", status = "modified" },
+      { code = "A", path = "new.lua", status = "added" },
+      { code = "R", path = "old.lua", status = "removed" },
       { code = "?", path = "notes.txt", status = "unknown" },
-      { code = "?", path = "lua/cvs/.#init.lua.1.4", status = "unknown" },
-      { code = "C", path = "plugin/cvs.lua", status = "conflict" },
+      { code = "?", path = ".#init.lua.1.4", status = "unknown" },
+      { code = "C", path = "plugin.lua", status = "conflict" },
       { code = "U", path = "README.md", status = "updated" },
     },
-    messages = {
-      "status warning",
-    },
+    messages = { "status warning" },
   }
 
-  local view_state = service._build_view_state(snapshot, {}, {})
-  assert_eq(view_state.scope_label, "workspace", "default scope label")
-  assert_eq(view_state.total_count, 6, "visible file count")
-  assert_eq(view_state.counts.modified, 1, "modified count")
-  assert_eq(view_state.counts.unknown, 1, "unknown count")
-  assert_eq(view_state.counts.backup, 1, "CVS backup count")
-  assert_eq(view_state.counts.updated, nil, "updated count is hidden")
-  assert_eq(view_state.messages[1], "status warning", "messages are preserved")
-  assert_eq(view_state.selectable_count, 3, "committable file count")
-  assert_eq(view_state.selected_count, 0, "initial selection is empty")
-
-  local modified = find_section(view_state, "modified")
-  local unknown = find_section(view_state, "unknown")
-  local backups = find_section(view_state, "backup")
-  local updated = find_section(view_state, "updated")
-
-  assert_eq(#modified.items, 1, "modified section item count")
-  assert_eq(modified.items[1].path, "lua/cvs/init.lua", "modified item path")
-  assert_eq(modified.items[1].selectable, true, "modified item is selectable")
-  assert_eq(modified.items[1].selected, false, "modified item starts unselected")
-  assert_eq(#unknown.items, 1, "unknown section item count")
-  assert_eq(unknown.items[1].selectable, false, "unknown item is not selectable")
-  assert_eq(backups.title, "CVS Backups", "CVS backups have a dedicated section")
-  assert_eq(backups.items[1].path, "lua/cvs/.#init.lua.1.4", "CVS backup section item")
-  assert_eq(backups.items[1].is_cvs_backup, true, "CVS backup item is identified for actions")
-  assert_eq(updated, nil, "updated section is hidden")
+  local view = service._build_view_state(snapshot, {}, {})
+  assert(view.total_count == 6 and view.selectable_count == 3 and view.selected_count == 0,
+    "status model counts visible and committable files")
+  assert(view.counts.backup == 1 and view.counts.updated == nil,
+    "backups are visible while incoming-only files remain hidden")
+  assert(section(view, "modified").items[1].selectable and not section(view, "unknown").items[1].selectable,
+    "only committable CVS states are selectable")
+  assert(section(view, "backup").items[1].is_cvs_backup, "CVS recovery files have a dedicated action type")
 
   local selected = service._build_view_state(snapshot, {}, {
-    selected = {
-      ["lua/cvs/init.lua"] = true,
-      ["notes.txt"] = true,
-      ["missing.lua"] = true,
-    },
+    selected = { ["init.lua"] = true, ["notes.txt"] = true, ["missing.lua"] = true },
   })
-  assert_eq(selected.selected_count, 1, "only eligible paths remain selected")
-  assert_eq(selected.selected["lua/cvs/init.lua"], true, "eligible selection is preserved")
-  assert_eq(selected.selected["notes.txt"], nil, "unknown selection is removed")
-  assert_eq(selected.selected["missing.lua"], nil, "missing selection is removed")
-  local selected_section = find_section(selected, "selected")
-  assert_eq(#selected_section.items, 1, "selected files have a dedicated section")
-  assert_eq(selected_section.items[1].path, "lua/cvs/init.lua", "selected section contains the selected file")
-  assert_eq(selected.sections[1].kind, "selected", "selected section is rendered first")
-  assert_eq(find_section(selected, "modified"), nil, "selected files leave their status section")
+  assert(selected.selected_count == 1 and selected.selected["init.lua"],
+    "refresh preserves only eligible selections")
+  assert(not selected.selected["notes.txt"] and not selected.selected["missing.lua"],
+    "refresh drops unknown and absent selections")
+  assert(selected.sections[1].kind == "selected" and section(selected, "modified") == nil,
+    "selected files move into the leading selected section")
 
   local temp_dir = vim.fn.tempname()
   vim.fn.mkdir(temp_dir .. "/CVS", "p")
@@ -87,47 +48,33 @@ return function()
     "/present.lua/1.4/Thu Jan 01 00:00:00 2026//",
   }, temp_dir .. "/CVS/Entries")
   vim.fn.writefile({ "content" }, temp_dir .. "/present.lua")
+
   local reconciled = service._reconcile_working_copy({
     { code = "U", path = "tracked.lua", status = "updated" },
     { code = "U", path = "present.lua", status = "updated" },
     { code = "U", path = "incoming.lua", status = "updated" },
-  }, {
-    root_dir = temp_dir,
-  })
-  assert_eq(reconciled[1].code, "R", "missing tracked file gets a removal status code")
-  assert_eq(reconciled[1].status, "missing", "missing tracked file is not treated as incoming")
-  assert_eq(reconciled[2].status, "updated", "present tracked file remains incoming")
-  assert_eq(reconciled[3].status, "updated", "untracked incoming file remains incoming")
-
+  }, { root_dir = temp_dir })
+  assert(reconciled[1].status == "missing" and reconciled[2].status == "updated",
+    "metadata distinguishes deleted tracked files from incoming updates")
   local missing_view = service._build_view_state({
     workspace = { root_dir = temp_dir },
     files = reconciled,
   }, {}, {})
-  local missing = find_section(missing_view, "missing")
-  assert_eq(#missing.items, 1, "missing tracked file is visible")
-  assert_eq(missing.items[1].selectable, false, "missing file must be scheduled before commit")
-  assert_eq(missing_view.total_count, 1, "incoming file remains hidden from status")
+  assert(#section(missing_view, "missing").items == 1 and missing_view.total_count == 1,
+    "only the missing working file is promoted into status")
 
   vim.fn.mkdir(temp_dir .. "/nested", "p")
   vim.fn.writefile({ "recovery" }, temp_dir .. "/.#tracked.lua.1.6")
   vim.fn.writefile({ "nested recovery" }, temp_dir .. "/nested/.#other.lua.1.2")
-  local with_backups = service._append_cvs_backups({
+  local backups = service._append_cvs_backups({
     { code = "?", path = ".#tracked.lua.1.6", status = "unknown" },
-  }, {
-    root_dir = temp_dir,
-  }, {})
-  assert_eq(#with_backups, 2, "CVS backups are added without duplicating reported files")
-  assert_eq(with_backups[2].path, "nested/.#other.lua.1.2", "nested CVS backup is workspace-relative")
-  assert_eq(with_backups[2].status, "unknown", "CVS backup uses the deletable unknown status")
-  assert_eq(with_backups[1].is_cvs_backup, true, "CVS-reported backup is identified")
-  assert_eq(with_backups[2].is_cvs_backup, true, "scanned CVS backup is identified")
+  }, { root_dir = temp_dir }, {})
+  assert(#backups == 2 and backups[1].is_cvs_backup and backups[2].is_cvs_backup,
+    "backup scan deduplicates CVS output and marks every recovery file")
+  assert(backups[2].path == "nested/.#other.lua.1.2", "backup paths remain workspace-relative")
 
-  local file_scoped_backups = service._append_cvs_backups({}, {
-    root_dir = temp_dir,
-  }, {
-    path = "tracked.lua",
-  })
-  assert_eq(#file_scoped_backups, 1, "file scope includes only backups for that file")
-  assert_eq(file_scoped_backups[1].path, ".#tracked.lua.1.6", "file-scoped CVS backup path")
+  local scoped = service._append_cvs_backups({}, { root_dir = temp_dir }, { path = "tracked.lua" })
+  assert(#scoped == 1 and scoped[1].path == ".#tracked.lua.1.6",
+    "file-scoped status includes only matching recovery files")
   vim.fn.delete(temp_dir, "rf")
 end

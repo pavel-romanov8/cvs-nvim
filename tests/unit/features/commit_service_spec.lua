@@ -46,6 +46,12 @@ return function()
     assert_eq(built.opts.workspace, nil, "workspace is not a command target")
     assert_eq(built.opts.path, nil, "selected files take precedence over path scope")
     assert_eq(#built.opts.files, 2, "command options retain selected files")
+    local prefilled = service._build_view_state(workspace, {
+      workspace = workspace,
+      files = { "pkg/one.lua" },
+      message_lines = { "Revert change", "", "Reverts CVS commit ABC123." },
+    })
+    assert_eq(prefilled.message_lines[1], "Revert change", "commit editor accepts a generated message")
 
     capabilities.detect = function()
       return { bin = "cvs", executable = true }

@@ -18,8 +18,13 @@
   - Considered finished for now.
 
 - `:CvsLog`
-  - File history with toggleable highlighted diffs and full predecessor-diff views.
-  - Considered finished for the file-history workflow.
+  - Context-sensitive file, directory, and workspace history.
+  - Directory scopes group repository revisions by exact shared commit ID.
+  - File revisions expose copy/revert actions for their complete commit.
+
+- `:CvsRevert`
+  - Repository-wide commit-ID discovery, preflight, reverse-diff review, native
+    reverse merges, and handoff to a prefilled explicit commit.
 
 ### Existing, But Not Good Enough Yet
 

@@ -74,8 +74,16 @@ return function()
   assert_eq(table.concat(annotate_cmd, " "), "cvs -f annotate -r 1.7 pkg/file.lua", "annotate pins the revision")
 
   assert_eq(table.concat(cmd.log({ path = "file.lua" }), " "), "cvs -f log file.lua", "log command targets a file")
+  assert_eq(table.concat(cmd.rlog({ path = "project/pkg" }), " "), "cvs -f rlog project/pkg",
+    "repository log targets a module or subtree")
   assert_eq(table.concat(cmd.revision_diff({ path = "file.lua", from = "1.2", to = "1.3" }), " "),
     "cvs -f diff -u -r 1.2 -r 1.3 file.lua", "historical diff pins both revisions")
+
+  assert_eq(
+    table.concat(cmd.reverse_merge({ path = "file.lua", from = "1.7", to = "1.6" }), " "),
+    "cvs -f update -j 1.7 -j 1.6 file.lua",
+    "reverse merge applies the selected revision back to its predecessor"
+  )
 
   local base_cmd = cmd.base({ path = "file.lua", revision = "1.7" })
   assert_eq(

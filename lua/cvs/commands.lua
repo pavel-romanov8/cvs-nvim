@@ -113,9 +113,20 @@ function M.setup()
   create("CvsLog", function(args)
     require("cvs").log(command_opts(args))
   end, {
+    bang = true,
     nargs = "?",
     complete = "file",
     desc = "Open the CVS log workflow",
+  })
+
+  create("CvsRevert", function(args)
+    local opts = command_opts(args)
+    opts.commit_id = args.args
+    opts.path = nil
+    require("cvs").revert(opts)
+  end, {
+    nargs = 1,
+    desc = "Prepare a revert for a complete CVS commit ID",
   })
 
   create("CvsAnnotate", function(args)

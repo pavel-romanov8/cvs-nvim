@@ -134,23 +134,70 @@ COMMANDS                                                        *cvs-commands*
         changes are not included and are called out in the view.
 
                                                         *:CvsLog*
-:CvsLog [path]
-        Open the file's CVS revision history (or history of the given file).
-        Like |:Cvs|, the log opens in a half-height horizontal split by
-        default. Use :vertical CvsLog, :belowright CvsLog, or :tab CvsLog to
-        override the layout for one invocation. Configure ui.log.kind,
-        ui.log.height, or ui.log.width to change its default layout.
-        The log loads asynchronously. Each revision shows its date, author,
-        state, line counts, tags, and commit message. Press = on a revision
-        to expand/collapse its highlighted diff against its predecessor inline
-        (the preview shows up to 200 diff lines by default); pressing = on
-        another revision switches the preview. Press <CR> or d to open the
-        full diff in a read-only split, which immediately shows a loading
-        indicator while CVS runs. On the first branch revision, the
+:CvsLog[!] [path]
+        Open CVS history for the current context or explicit path. In a normal
+        file buffer, omitting [path] retains the file-history workflow. In a
+        directory buffer it opens history for that directory subtree; opening
+        the workspace root shows the whole project. An explicit file or
+        directory always selects that scope:
+>
+            :CvsLog %
+            :CvsLog src/module/
+            :CvsLog .
+<
+        Use :CvsLog! to open the complete detected workspace history regardless
+        of the currently focused file or directory. This is the fastest route
+        to a recent project commit when its ID is not already known.
+
+        CVS-backed status buffers resolve to their configured scope or workspace.
+        From |:Cvs|,
+        gl continues to open history for the tracked file under the cursor.
+
+        File history shows each revision's date, author, state, line counts,
+        tags, commit message, and shared CVS commit ID when the server provides
+        one. Press = to toggle its highlighted predecessor diff inline, and
+        <CR> or d for the full diff. On the first branch revision, the
         predecessor is the branch point; the initial trunk revision is shown
-        as additions against an empty file. Press R to refresh or q to close.
-        From the |:Cvs| status view, press gl on a tracked file to open its
-        history. Directory-wide logs are not supported.
+        as additions against an empty file.
+
+        Directory history uses `cvs rlog` so removed repository files are not
+        omitted. File revisions are grouped and sorted by their exact shared
+        commit ID. Press = on a commit to expand or collapse its affected
+        files, then d on a file for its revision diff. Revisions without a
+        commit ID remain separate rather than being guessed from timestamps or
+        messages. Project and large-directory logs can be expensive on CVS;
+        loading is asynchronous and diffs are requested only when opened.
+
+        In either form, yc copies the selected shared commit ID into the
+        unnamed register and cr opens a complete revert plan for it. Press R
+        to refresh or q to close. Like |:Cvs|, the log opens in a half-height
+        horizontal split by default. Use :vertical CvsLog,
+        :belowright CvsLog, or :tab CvsLog to override the layout. Configure
+        ui.log.kind, ui.log.height, or ui.log.width to change its default.
+
+                                                     *:CvsRevert*
+:CvsRevert {commit-id}
+        Discover every repository revision carrying the exact shared commit
+        ID and open a revert plan. This is also available as cr on an entry in
+        |:CvsLog|. The lookup covers the workspace repository module, including
+        removed files, and never infers changeset membership from dates or log
+        messages.
+
+        Before enabling the revert, the plan verifies that every affected
+        directory is checked out, affected buffers have no unsaved changes,
+        and CVS reports no local or incoming changes for the affected files.
+        Press d on a file to inspect its reverse diff. Press R to apply the
+        plan to the working copy, or cc to apply it and then open a prefilled
+        commit message. The final remote commit is still explicit: submit the
+        commit buffer with :write or CTRL-C CTRL-C.
+
+        Modified files are reversed with native CVS merges of the form
+        `cvs update -j BAD -j PREDECESSOR`, preserving later revisions where
+        CVS can merge them. Files introduced by the commit are scheduled for
+        removal, and files removed by it are restored from their predecessor.
+        A merge conflict or command failure stops the operation before a commit
+        is opened. Earlier files may already be locally modified if a later
+        file fails; the plan reports this and leaves the changes for review.
 
                                                         *:CvsAnnotate*
 :CvsAnnotate [path]

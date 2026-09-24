@@ -14,7 +14,7 @@ local function render(bufnr, view_state)
   require("cvs.ui.highlights").setup()
   vim.api.nvim_buf_add_highlight(bufnr, namespace, "CvsHeader", 0, 0, -1)
   for row, line in ipairs(lines) do
-    if line:match("^revision [%d.]+") then
+    if line:match("^revision [%d.]+") or line:match("^commit %S+") then
       vim.api.nvim_buf_add_highlight(bufnr, namespace, "CvsSection", row - 1, 0, -1)
     end
   end
@@ -49,7 +49,7 @@ end
 
 function M.open(view_state, opts)
   local bufnr = ui_buffer.create({
-    name = ("cvs://log/%s"):format(view_state.target_path),
+    name = ("cvs://log/%s"):format(view_state.target_path or view_state.scope_path),
     filetype = "cvs-log",
   })
   state.attach_buffer(bufnr, { kind = "log", view_state = view_state, row_map = {} })
@@ -70,6 +70,12 @@ function M.open(view_state, opts)
     { mode = "n", lhs = "d", rhs = function()
       require("cvs.features.log.service").diff_revision(bufnr)
     end, desc = "Diff CVS revision with its predecessor" },
+    { mode = "n", lhs = "yc", rhs = function()
+      require("cvs.features.log.service").copy_commit_id(bufnr)
+    end, desc = "Copy CVS commit ID" },
+    { mode = "n", lhs = "cr", rhs = function()
+      require("cvs.features.log.service").revert_commit(bufnr)
+    end, desc = "Revert complete CVS commit" },
   })
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = bufnr,
@@ -102,14 +108,23 @@ function M.update(bufnr, view_state)
   local attachment = state.get_buffer(bufnr)
   local current = M.current(bufnr)
   if current then
-    attachment.cursor_revision = current.revision
+    if current.kind == "commit" or current.kind == "change" then
+      attachment.cursor_commit = current.commit.key
+    else
+      attachment.cursor_revision = current.revision
+    end
   end
   render(bufnr, view_state)
-  if not view_state.loading and attachment.cursor_revision then
+  if not view_state.loading and (attachment.cursor_revision or attachment.cursor_commit) then
     local winid = vim.fn.bufwinid(bufnr)
     if winid ~= -1 then
-      for row, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
-        if line:match("^revision " .. vim.pesc(attachment.cursor_revision) .. "%s") then
+      local current_map = attachment.row_map or {}
+      for row, target in pairs(current_map) do
+        local matches_revision = attachment.cursor_revision and target.revision == attachment.cursor_revision
+        local matches_commit = attachment.cursor_commit
+          and (target.kind == "commit" or target.kind == "change")
+          and target.commit.key == attachment.cursor_commit
+        if matches_revision or matches_commit then
           vim.api.nvim_win_set_cursor(winid, { row, 0 })
           break
         end

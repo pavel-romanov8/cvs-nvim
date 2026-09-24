@@ -30,6 +30,7 @@ M.remove = call("cvs.features.files.service", "remove")
 M.commit = call("cvs.features.commit.service", "open")
 M.diff = call("cvs.features.diff.service", "open")
 M.log = call("cvs.features.log.service", "open")
+M.revert = call("cvs.features.revert.service", "open")
 M.annotate = call("cvs.features.annotate.service", "open")
 M.conflicts = call("cvs.features.conflicts.service", "open")
 

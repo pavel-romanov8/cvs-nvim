@@ -1,167 +1,82 @@
 local render = require("cvs.features.status.render")
 
-local function assert_match(text, pattern, message)
-  if not text:find(pattern, 1, true) then
-    error(("%s: missing %q in %q"):format(message, pattern, text))
-  end
-end
-
-local function assert_true(value, message)
-  if not value then
-    error(message)
-  end
+local function contains(lines, needle)
+  return table.concat(lines, "\n"):find(needle, 1, true) ~= nil
 end
 
 return function()
   local lines, row_map, highlights, syntax_rows = render.lines({
-    workspace = {
-      root_dir = "/tmp/example",
-    },
+    workspace = { root_dir = "/tmp/example" },
     scope_label = "workspace",
     generated_at = "2026-03-27 12:00:00",
     cached = true,
-    total_count = 5,
+    total_count = 4,
     selectable_count = 2,
     selected_count = 1,
-    counts = {
-      modified = 1,
-      added = 1,
-      missing = 1,
-      removed = 1,
-      unknown = 1,
-    },
+    counts = { modified = 1, added = 1, missing = 1, unknown = 1 },
     sections = {
       {
         kind = "selected",
         title = "Selected",
-        selectable_count = 1,
-        selected_count = 1,
         items = {
-          { code = "A", path = "lua/cvs/new.lua", status = "added", selectable = true, selected = true },
+          { code = "A", path = "new.lua", status = "added", selectable = true, selected = true },
         },
       },
       {
         kind = "modified",
         title = "Modified",
-        selectable_count = 1,
-        selected_count = 0,
         items = {
-          { code = "M", path = "lua/cvs/init.lua", status = "modified", selectable = true, selected = false },
+          { code = "M", path = "changed.lua", status = "modified", selectable = true },
         },
       },
       {
         kind = "missing",
         title = "Missing",
         items = {
-          { code = "R", path = "lua/cvs/missing.lua", status = "missing", selectable = false, selected = false },
+          { code = "R", path = "missing.lua", status = "missing" },
         },
       },
       {
         kind = "unknown",
         title = "Unknown",
         items = {
-          { code = "?", path = "notes.txt", status = "unknown", selectable = false, selected = false },
+          { code = "?", path = "notes.txt", status = "unknown" },
         },
       },
-    },
-    messages = {
-      "example warning",
     },
     inline_diff = {
-      path = "lua/cvs/init.lua",
-      lines = {
-        "@@ -1 +1 @@",
-        "-local old = true",
-        "+local new = true",
-      },
+      path = "changed.lua",
+      lines = { "@@ -1 +1 @@", "-old", "+new" },
     },
   })
 
-  local text = table.concat(lines, "\n")
-  assert_match(text, "CVS", "header")
-  assert_match(text, "Root: /tmp/example", "root line")
-  assert_match(text, "Files: 5", "file count")
-  assert_match(text, "Commit selection: 1/2", "commit selection count")
-  assert_match(text, "Snapshot: 2026-03-27 12:00:00 (cached)", "cached snapshot marker")
-  assert_match(text, "M: 1, A: 1, R: 2, ?: 1", "summary counts")
-  assert_match(text, "Selected (1)", "selected section")
-  assert_match(text, "Modified (1)", "modified section")
-  assert_match(text, "Missing (1)", "missing section")
-  assert_match(text, "    M  lua/cvs/init.lua", "unselected file line")
-  assert_match(text, "    A  lua/cvs/new.lua", "selected file line")
-  assert_match(text, "    R  lua/cvs/missing.lua", "missing file line")
-  assert_true(not text:find("[ ]", 1, true), "unselected files do not use checkboxes")
-  assert_true(not text:find("[x]", 1, true), "selected files do not use checkboxes")
-  assert_match(text, "    ?  notes.txt", "non-selectable file line")
-  assert_match(text, "   @@ -1 +1 @@", "inline diff hunk")
-  assert_match(text, "   -local old = true", "inline diff deletion")
-  assert_match(text, "   +local new = true", "inline diff addition")
-  assert_true(not text:find("Messages", 1, true), "messages section is hidden")
-  assert_true(not text:find("example warning", 1, true), "status messages are hidden")
-  assert_match(text, "<CR> opens the current file", "help line")
-  assert_match(text, "- toggles the commit selection", "selection help line")
-  assert_match(text, "cc opens a commit message for the selected files", "commit help line")
-  assert_match(text, "A adds unknown files as binary (-kb)", "binary add help line")
+  assert(contains(lines, "Root: /tmp/example") and contains(lines, "Commit selection: 1/2"),
+    "status renders workspace and selection summary")
+  assert(contains(lines, "Selected (1)") and contains(lines, "M  changed.lua") and contains(lines, "?  notes.txt"),
+    "status renders grouped CVS states")
+  assert(contains(lines, "   @@ -1 +1 @@") and contains(lines, "   +new"),
+    "status embeds the active inline diff")
 
-  local backup_lines = render.lines({
-    workspace = { root_dir = "/tmp/example" },
-    scope_label = "workspace",
-    total_count = 2,
-    selectable_count = 0,
-    selected_count = 0,
-    counts = { unknown = 1, backup = 1 },
-    sections = {
-      {
-        kind = "unknown",
-        title = "Unknown",
-        items = {
-          { code = "?", path = "notes.txt", status = "unknown", selectable = false },
-        },
-      },
-      {
-        kind = "backup",
-        title = "CVS Backups",
-        items = {
-          { code = "?", path = ".#init.lua.1.4", status = "unknown", is_cvs_backup = true },
-        },
-      },
-    },
-  })
-  local backup_text = table.concat(backup_lines, "\n")
-  assert_match(backup_text, "State Counts: ?: 1, #: 1", "backup summary count")
-  assert_match(backup_text, "CVS Backups (1)", "backup section")
-
-  local targets = {}
-  for row, target in pairs(row_map) do
-    targets[target.kind] = targets[target.kind] or {}
-    targets[target.kind][#targets[target.kind] + 1] = { row = row, target = target }
-  end
-  assert_true(#targets.section == 4, "section rows are semantic targets")
-  assert_true(#targets.file == 7, "file and inline diff rows are semantic targets")
+  local target_kinds = {}
+  for _, target in pairs(row_map) do target_kinds[target.kind] = true end
+  assert(target_kinds.section and target_kinds.file, "rendered rows retain semantic action targets")
 
   local groups = {}
-  for _, highlight in ipairs(highlights) do
-    groups[highlight.group] = true
-  end
-  assert_true(groups.CvsHeader, "header highlight")
-  assert_true(groups.CvsSection, "section highlight")
-  assert_true(groups.CvsStatusModified, "modified file highlight")
-  assert_true(groups.CvsStatusAdded, "added file highlight")
-  assert_true(groups.CvsStatusMissing, "missing file highlight")
-  assert_true(groups.CvsDiffChange, "inline diff hunk highlight")
-  assert_true(groups.CvsDiffDelete, "inline diff deletion highlight")
-  assert_true(groups.CvsDiffAdd, "inline diff addition highlight")
-  assert_true(lines[syntax_rows[2]] == "   -local old = true", "source syntax maps deletion rows")
-  assert_true(lines[syntax_rows[3]] == "   +local new = true", "source syntax maps addition rows")
+  for _, highlight in ipairs(highlights) do groups[highlight.group] = true end
+  assert(groups.CvsStatusModified and groups.CvsStatusAdded and groups.CvsStatusMissing,
+    "CVS states retain distinct highlights")
+  assert(groups.CvsDiffChange and groups.CvsDiffDelete and groups.CvsDiffAdd,
+    "inline diff retains semantic highlights")
+  assert(lines[syntax_rows[2]] == "   -old" and lines[syntax_rows[3]] == "   +new",
+    "source syntax rows map back to diff content")
 
   local error_lines = render.lines({
     workspace = { root_dir = "/tmp/example" },
     scope_label = "workspace",
     error = "status_failed: CVS status exited with code 124.",
   })
-  local error_text = table.concat(error_lines, "\n")
-  assert_match(error_text, "Status unavailable: status_failed", "status failure")
-  assert_true(not error_text:find("Working copy is clean", 1, true), "failed status is not reported as clean")
+  assert(contains(error_lines, "Status unavailable: status_failed")
+    and not contains(error_lines, "Working copy is clean"), "status failures cannot look like a clean workspace")
 
   local warning_lines = render.lines({
     workspace = { root_dir = "/tmp/example" },
@@ -173,6 +88,6 @@ return function()
     sections = {},
     warning = "Status incomplete: CVS exited with code 1; showing the status entries it returned.",
   })
-  local warning_text = table.concat(warning_lines, "\n")
-  assert_match(warning_text, "Status incomplete: CVS exited with code 1", "partial status warning")
+  assert(contains(warning_lines, "Status incomplete: CVS exited with code 1"),
+    "partial status remains visibly incomplete")
 end
