@@ -1,5 +1,6 @@
 local capabilities = require("cvs.cvs.capabilities")
 local cmd = require("cvs.cvs.cmd")
+local config = require("cvs.config")
 local context = require("cvs.cvs.context")
 local errors = require("cvs.core.errors")
 local events = require("cvs.core.events")
@@ -7,6 +8,8 @@ local queue = require("cvs.core.queue")
 local runner = require("cvs.cvs.runner")
 local state = require("cvs.core.state")
 local util = require("cvs.core.util")
+
+local uv = vim.uv or vim.loop
 
 local M = {}
 
@@ -110,6 +113,89 @@ local function focus_source(view_state)
   end
 end
 
+local function line_splitter(on_line)
+  local partial = ""
+
+  local function emit(line)
+    on_line((line:gsub("\r$", "")))
+  end
+
+  return {
+    push = function(data)
+      local text = partial .. data
+      local start = 1
+      while true do
+        local newline = text:find("\n", start, true)
+        if not newline then
+          break
+        end
+        emit(text:sub(start, newline - 1))
+        start = newline + 1
+      end
+      partial = text:sub(start)
+    end,
+    flush = function()
+      if partial ~= "" then
+        emit(partial)
+        partial = ""
+      end
+    end,
+  }
+end
+
+local function start_timer(callback)
+  local timer = uv.new_timer()
+  if not timer then
+    return nil
+  end
+
+  timer:start(1000, 1000, vim.schedule_wrap(callback))
+  return timer
+end
+
+local function stop_timer(timer)
+  if timer and not timer:is_closing() then
+    timer:stop()
+    timer:close()
+  end
+end
+
+local function completion_summary(view_state, result)
+  local duration = util.format_duration(result.duration_ms)
+
+  if result.code == 0 and not result.stream_error then
+    return ("CVS commit succeeded for %s in %s. Press q to close."):format(view_state.scope_label, duration),
+      vim.log.levels.INFO
+  end
+
+  local reason
+  if result.stream_error then
+    reason = "output error: " .. result.stream_error
+  elseif result.code == 124 then
+    reason = "timed out"
+  elseif result.signal and result.signal ~= 0 then
+    reason = ("killed by signal %d"):format(result.signal)
+  else
+    reason = ("exit code %d"):format(result.code)
+  end
+
+  return ("CVS commit FAILED for %s (%s) after %s. See the commit buffer for output."):format(
+    view_state.scope_label,
+    reason,
+    duration
+  ),
+    vim.log.levels.ERROR
+end
+
+function M.close(bufnr)
+  local attachment = state.get_buffer(bufnr)
+  local view_state = attachment and attachment.view_state
+  require("cvs.features.commit.buffer").close(bufnr)
+  if view_state then
+    focus_source(view_state)
+  end
+end
+
 function M.submit(bufnr)
   local attachment = state.get_buffer(bufnr)
   if not attachment or attachment.kind ~= "commit" then
@@ -118,10 +204,19 @@ function M.submit(bufnr)
 
   local view_state = attachment.view_state
   if view_state.phase == "queued" or view_state.phase == "running" then
-    return nil, errors.new("commit_in_progress", "a CVS commit is already in progress for this buffer")
+    local err = errors.new("commit_in_progress", "a CVS commit is already in progress for this buffer")
+    util.notify(errors.to_string(err), vim.log.levels.WARN)
+    return nil, err
   end
 
-  local message_lines, message = require("cvs.features.commit.buffer").get_message(bufnr)
+  if view_state.phase == "done" and view_state.result and view_state.result.code == 0 then
+    local err = errors.new("commit_completed", "this CVS commit already succeeded; press q to close the buffer")
+    util.notify(errors.to_string(err), vim.log.levels.WARN)
+    return nil, err
+  end
+
+  local commit_buffer = require("cvs.features.commit.buffer")
+  local message_lines, message = commit_buffer.get_message(bufnr)
   if not message then
     local err = errors.new("commit_message_empty", "commit message cannot be empty")
     util.notify(errors.to_string(err), vim.log.levels.ERROR)
@@ -134,27 +229,81 @@ function M.submit(bufnr)
 
   view_state.message_lines = message_lines
   view_state.command = command
+  view_state.output = {}
+  view_state.result = nil
+  view_state.started_at = nil
+  view_state.started_hrtime = nil
+  view_state.completed_at = nil
   view_state.messages = {
     "Commit queued.",
   }
   view_state.phase = queue.is_busy(view_state.workspace.root_dir) and "queued" or "running"
-  require("cvs.features.commit.buffer").update(bufnr, view_state)
+  commit_buffer.update(bufnr, view_state)
 
   queue.enqueue(view_state.workspace.root_dir, function(done)
+    local stdout_lines = {}
+    local stderr_lines = {}
+    local render_pending = false
+    local timer
+
+    local function render()
+      render_pending = false
+      if view_state.phase == "running" then
+        commit_buffer.update(bufnr, view_state, { follow = true })
+      end
+    end
+
+    local function schedule_render()
+      if render_pending then
+        return
+      end
+      render_pending = true
+      vim.schedule(render)
+    end
+
+    local function collector(target)
+      return line_splitter(function(line)
+        target[#target + 1] = line
+        view_state.output[#view_state.output + 1] = line
+        schedule_render()
+      end)
+    end
+
+    local stdout = collector(stdout_lines)
+    local stderr = collector(stderr_lines)
+
     view_state.phase = "running"
     view_state.started_at = os.date("%Y-%m-%d %H:%M:%S")
-    view_state.messages = {
-      "Running CVS commit...",
-    }
-    require("cvs.features.commit.buffer").update(bufnr, view_state)
+    view_state.started_hrtime = uv.hrtime()
+    view_state.messages = {}
+    commit_buffer.update(bufnr, view_state, { follow = true })
+    timer = start_timer(function()
+      if view_state.phase ~= "running" or not vim.api.nvim_buf_is_valid(bufnr) then
+        stop_timer(timer)
+        return
+      end
+      commit_buffer.update(bufnr, view_state, { follow = true })
+    end)
 
-    runner.run(command, {
-      cwd = view_state.workspace.root_dir,
-    }, function(result)
+    local function on_complete(payload)
+      stop_timer(timer)
+      stdout.flush()
+      stderr.flush()
+
+      local result = vim.tbl_extend("force", {}, payload, {
+        stdout = stdout_lines,
+        stderr = stderr_lines,
+      })
+      if result.code == 0 and result.stream_error then
+        result.code = 1
+      end
+
       local function complete(status_snapshot, status_err)
         local ok, callback_err = pcall(function()
-          local messages = vim.deepcopy(result.stdout)
-          vim.list_extend(messages, result.stderr)
+          local messages = {}
+          if result.stream_error then
+            messages[#messages + 1] = "Output error: " .. result.stream_error
+          end
           if status_err then
             messages[#messages + 1] = "Status refresh failed: " .. errors.to_string(status_err)
           end
@@ -173,26 +322,18 @@ function M.submit(bufnr)
               scope = view_state.scope_label,
               files = view_state.files,
             })
-            util.notify(("CVS commit completed for %s."):format(view_state.scope_label))
-
-            if view_state.source_bufnr then
-              require("cvs.features.commit.buffer").close(bufnr)
-              focus_source(view_state)
-            else
-              require("cvs.features.commit.buffer").update(bufnr, view_state)
-            end
-          else
-            require("cvs.features.commit.buffer").update(bufnr, view_state)
-            local message_text = messages[1] or ("CVS commit exited with code %d."):format(result.code)
-            util.notify(message_text, vim.log.levels.WARN)
           end
+
+          commit_buffer.update(bufnr, view_state, { follow = true })
+          local summary, level = completion_summary(view_state, result)
+          util.notify(summary, level)
         end)
 
         if not ok then
           view_state.phase = "done"
           view_state.completed_at = os.date("%Y-%m-%d %H:%M:%S")
           view_state.messages = { ("Internal error: %s"):format(callback_err) }
-          require("cvs.features.commit.buffer").update(bufnr, view_state)
+          commit_buffer.update(bufnr, view_state, { follow = true })
           util.notify(("CVS commit failed internally: %s"):format(callback_err), vim.log.levels.ERROR)
         end
 
@@ -204,13 +345,32 @@ function M.submit(bufnr)
         util.notify(("CVS status refresh failed internally: %s"):format(refresh_err), vim.log.levels.ERROR)
         complete(nil, refresh_err)
       end
-    end)
+    end
+
+    local process_ok, process_err = pcall(runner.stream, command, {
+      cwd = view_state.workspace.root_dir,
+      timeout = config.get().cvs.commit_timeout_ms or false,
+    }, {
+      on_stdout = stdout.push,
+      on_stderr = stderr.push,
+      on_complete = on_complete,
+    })
+    if not process_ok then
+      on_complete({
+        cmd = command,
+        code = 1,
+        stream_error = tostring(process_err),
+        duration_ms = 0,
+      })
+    end
   end, function(queue_err)
     util.notify(("CVS commit queue error: %s"):format(queue_err), vim.log.levels.ERROR)
   end)
 
   return command
 end
+
+M._line_splitter = line_splitter
 
 M._build_view_state = build_view_state
 

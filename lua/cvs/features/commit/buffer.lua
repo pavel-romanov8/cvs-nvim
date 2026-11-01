@@ -1,6 +1,9 @@
 local state = require("cvs.core.state")
 local ui_buffer = require("cvs.ui.buffer")
+local util = require("cvs.core.util")
 local window = require("cvs.ui.window")
+
+local uv = vim.uv or vim.loop
 
 local M = {}
 
@@ -39,6 +42,39 @@ local function extract_message_lines(lines)
   return trim_message_lines(message_lines)
 end
 
+local function status_text(view_state)
+  local result = view_state.result
+  if view_state.phase == "running" then
+    local elapsed = view_state.started_hrtime and (uv.hrtime() - view_state.started_hrtime) / 1000000 or 0
+    return ("RUNNING (%s elapsed) - waiting for CVS and its commit checks..."):format(util.format_duration(elapsed))
+  end
+
+  if view_state.phase == "done" and result then
+    local duration = util.format_duration(result.duration_ms)
+    if result.code == 0 then
+      return ("SUCCEEDED in %s - press q to close"):format(duration)
+    end
+
+    local reason
+    if result.stream_error then
+      reason = "output error"
+    elseif result.code == 124 then
+      reason = "timed out"
+    elseif result.signal and result.signal ~= 0 then
+      reason = ("killed by signal %d"):format(result.signal)
+    else
+      reason = ("exit code %d"):format(result.code)
+    end
+    return ("FAILED (%s) after %s - fix and :write to retry"):format(reason, duration)
+  end
+
+  if view_state.phase == "queued" then
+    return "QUEUED - waiting for another CVS operation to finish"
+  end
+
+  return view_state.phase
+end
+
 local function render_lines(view_state)
   local lines = vim.deepcopy(view_state.message_lines or { "" })
   if #lines == 0 then
@@ -50,7 +86,7 @@ local function render_lines(view_state)
   lines[#lines + 1] = comment("Use :write or press <C-c><C-c> in normal mode to submit.")
   lines[#lines + 1] = comment(("Workspace: %s"):format(view_state.workspace.root_dir))
   lines[#lines + 1] = comment(("Scope: %s"):format(view_state.scope_label))
-  lines[#lines + 1] = comment(("Status: %s"):format(view_state.phase))
+  lines[#lines + 1] = comment(("Status: %s"):format(status_text(view_state)))
 
   if view_state.files and #view_state.files > 0 then
     lines[#lines + 1] = comment(("Selected Files (%d):"):format(#view_state.files))
@@ -76,6 +112,19 @@ local function render_lines(view_state)
     lines[#lines + 1] = comment("Messages:")
     for _, message in ipairs(view_state.messages) do
       lines[#lines + 1] = comment("  " .. message)
+    end
+  end
+
+  if view_state.output then
+    lines[#lines + 1] = comment("")
+    lines[#lines + 1] = comment(("== CVS output (%d lines) =="):format(#view_state.output))
+    for _, line in ipairs(view_state.output) do
+      lines[#lines + 1] = comment("  " .. line)
+    end
+    if view_state.phase == "running" then
+      lines[#lines + 1] = comment("  ... still running")
+    elseif view_state.phase == "done" then
+      lines[#lines + 1] = comment(("== %s =="):format(status_text(view_state)))
     end
   end
 
@@ -132,7 +181,7 @@ function M.open(view_state, opts)
       mode = "n",
       lhs = "q",
       rhs = function()
-        M.close(bufnr)
+        require("cvs.features.commit.service").close(bufnr)
       end,
       desc = "Close CVS commit",
     },
@@ -169,7 +218,16 @@ function M.open(view_state, opts)
   return bufnr, winid
 end
 
-function M.update(bufnr, view_state)
+local function follow_output(bufnr)
+  local last = vim.api.nvim_buf_line_count(bufnr)
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    if vim.api.nvim_win_is_valid(winid) then
+      pcall(vim.api.nvim_win_set_cursor, winid, { last, 0 })
+    end
+  end
+end
+
+function M.update(bufnr, view_state, opts)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
@@ -181,6 +239,11 @@ function M.update(bufnr, view_state)
   state.attach_buffer(bufnr, attachment)
 
   ui_buffer.set_lines(bufnr, render_lines(view_state))
+  vim.bo[bufnr].modified = false
+
+  if opts and opts.follow and view_state.output then
+    follow_output(bufnr)
+  end
 end
 
 M._extract_message_lines = extract_message_lines

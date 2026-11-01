@@ -5,6 +5,8 @@ local defaults = {
     bin = "cvs",
     global_args = {},
     timeout_ms = 60000,
+    -- Commits run server-side checks that may take a long time; false disables the timeout.
+    commit_timeout_ms = false,
   },
   notifications = {
     enabled = true,

@@ -54,8 +54,9 @@ COMMANDS                                                        *cvs-commands*
         range, or the Unknown heading to add files in binary mode with -kb.
         Press cc to open a commit message buffer immediately for the selected
         files. CVS validates the selected files when the commit runs. The status
-        view refreshes after the commit completes, and CVS errors remain visible
-        in the commit buffer.
+        view refreshes after the commit completes. The commit buffer stays open
+        and streams CVS output as it arrives; press q to close it and return to
+        the status view.
 
         Tracked files deleted from the working copy appear in the Missing
         section. Press r on a missing file to schedule its removal in CVS; it
@@ -107,7 +108,13 @@ COMMANDS                                                        *cvs-commands*
                                                          *:CvsCommit*
 :CvsCommit [path]
         Open a direct CVS commit message buffer for the current workspace or
-        path.
+        path. Submit with :write or CTRL-C CTRL-C. While CVS runs, its stdout
+        and stderr (including server-side commit check output) stream into the
+        "CVS output" section at the bottom of the buffer, which follows the
+        newest line. The Status line shows elapsed time while running and the
+        final result (SUCCEEDED or FAILED with the exit code) when done. The
+        buffer stays open after the commit, success or failure; press q to
+        close it. A failed commit keeps its message so it can be retried.
 
                                                          *:CvsDiff*
 :CvsDiff[!] [path]
@@ -134,7 +141,7 @@ COMMANDS                                                        *cvs-commands*
         changes are not included and are called out in the view.
 
                                                         *:CvsLog*
-:CvsLog[!] [path]
+:CvsLog[!] [-d {days}] [-c {count|start-end}] [path]
         Open CVS history for the current context or explicit path. In a normal
         file buffer, omitting [path] retains the file-history workflow. In a
         directory buffer it opens history for that directory subtree; opening
@@ -144,7 +151,17 @@ COMMANDS                                                        *cvs-commands*
             :CvsLog %
             :CvsLog src/module/
             :CvsLog .
+            :CvsLog -d 3 .
+            :CvsLog -d 14 -c 10-20 .
 <
+        For a directory scope, -d overrides the number of recent days queried.
+        -c N shows the newest N matching commits, while -c START-END shows that
+        inclusive, newest-first commit range. Use 0 to disable either bound;
+        for example, `:CvsLog -d 0 -c 0 .` requests complete history. The date
+        option reduces server output; the commit option limits retained and
+        rendered results after CVS responds. Options may appear before or after
+        the path, and -- ends option parsing.
+
         Use :CvsLog! to open history for the complete detected workspace scope
         regardless of the currently focused file or directory. This is the
         fastest route to a recent project commit when its ID is not already
@@ -170,8 +187,8 @@ COMMANDS                                                        *cvs-commands*
         logs ask the server for the last 30 days by default, omit symbolic-name
         lists, suppress files with no matching revisions, and render at most 200
         grouped commits. The active bounds are shown at the top of the buffer.
-        Press L to double both bounds and query an older range. File-local logs
-        remain unlimited.
+        Press L to double the day window and commit-range upper bound. File-local
+        logs remain unlimited.
 
         In either form, yc copies the selected shared commit ID into the
         unnamed register and cr opens a complete revert plan for it. Press R
@@ -221,6 +238,7 @@ configured through setup():
     require("cvs").setup({
       cvs = {
         timeout_ms = 60000,
+        commit_timeout_ms = false,
       },
       status = {
         cache = {
@@ -250,10 +268,12 @@ configured through setup():
 <
 Directory-scoped |:CvsLog| queries are limited to the last 30 days and 200
 commits by default. Set log.repository.days or log.repository.max_commits to a
-different positive number; 0 disables that bound. The day limit is applied by
-`cvs rlog -d` on the server and therefore provides the main performance gain.
-The commit limit additionally bounds rendering and retained parsed data. Press
-L in a directory log to double the current limits for that buffer.
+different positive number; 0 disables that bound. Override them for one buffer
+with `:CvsLog -d DAYS -c COUNT PATH`; -c also accepts an inclusive START-END
+range. The day limit is applied by `cvs rlog -d` on the server and therefore
+provides the main performance gain. The commit limit additionally bounds
+rendering and retained parsed data. Press L in a directory log to double the
+current day limit and commit-range upper bound.
 
 The inline |:CvsLog| revision diff is limited to 200 diff lines by default.
 Set ui.log.preview_lines to another positive number, or 0 for no line limit.
@@ -269,6 +289,8 @@ diff.syntax_highlighting to false to disable source colors in these views.
 
 CVS commands time out after 60000 milliseconds by default. Increase
 cvs.timeout_ms for remote or large repositories whose commands take longer.
+Commits are exempt because server-side commit checks may run for a long time;
+set cvs.commit_timeout_ms to a number of milliseconds to bound them.
 The status kind accepts "split", "vsplit", "tab", or "floating". height sizes
 horizontal status splits and width sizes vertical status splits; values below
 1 are proportions of the source window.

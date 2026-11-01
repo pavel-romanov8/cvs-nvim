@@ -36,10 +36,12 @@ end
 local function repository_limits(opts)
   local defaults = config.get().log.repository
   local days = tonumber(opts.repository_days)
+  local commit_from = tonumber(opts.repository_commit_from)
   local max_commits = tonumber(opts.repository_max_commits)
   days = math.max(0, math.floor(days or defaults.days or 0))
+  commit_from = math.max(1, math.floor(commit_from or 1))
   max_commits = math.max(0, math.floor(max_commits or defaults.max_commits or 0))
-  return days, max_commits
+  return days, commit_from, max_commits
 end
 
 local function repository_command(request, days)
@@ -56,18 +58,17 @@ local function repository_command(request, days)
   })
 end
 
-local function limit_commits(parsed, max_commits)
+local function limit_commits(parsed, commit_from, max_commits)
   parsed.total_commits = #parsed.commits
-  if max_commits > 0 and #parsed.commits > max_commits then
-    local visible = {}
-    for index = 1, max_commits do
-      visible[index] = parsed.commits[index]
-    end
-    parsed.commits = visible
-    parsed.truncated = true
-  else
-    parsed.truncated = false
+  local last = max_commits > 0 and math.min(max_commits, parsed.total_commits) or parsed.total_commits
+  local visible = {}
+  for index = commit_from, last do
+    visible[#visible + 1] = parsed.commits[index]
   end
+  parsed.commits = visible
+  parsed.visible_from = commit_from
+  parsed.visible_to = last
+  parsed.truncated = commit_from > 1 or last < parsed.total_commits
   -- The grouped commits own all data needed by the UI. Dropping the parallel
   -- per-file parse tree also releases revisions hidden by max_commits.
   parsed.files = nil
@@ -141,6 +142,7 @@ local function prepare(opts)
   local parsed
   local repository_scope
   local repository_days
+  local repository_commit_from
   local repository_max_commits
   if is_directory then
     local relative_scope = relative_to(workspace.root_dir, path)
@@ -148,7 +150,7 @@ local function prepare(opts)
     if relative_scope ~= "." then
       repository_scope = util.path_join(repository_scope, relative_scope)
     end
-    repository_days, repository_max_commits = repository_limits(opts)
+    repository_days, repository_commit_from, repository_max_commits = repository_limits(opts)
     request = { cwd = workspace.root_dir, path = repository_scope }
     command = repository_command(request, repository_days)
     parsed = { files = {}, commits = {}, total_commits = 0 }
@@ -165,6 +167,7 @@ local function prepare(opts)
     scope_label = relative_to(workspace.root_dir, path),
     repository_scope = repository_scope,
     repository_days = repository_days,
+    repository_commit_from = repository_commit_from,
     repository_max_commits = repository_max_commits,
     target_path = is_directory and nil or path,
     request = request,
@@ -208,7 +211,7 @@ local function load(bufnr, view_state)
         view_state.parsed = limit_commits(parse.parse_scope(result.stdout, {
           scope_path = view_state.scope_path,
           logging_prefix = view_state.repository_scope,
-        }), view_state.repository_max_commits)
+        }), view_state.repository_commit_from, view_state.repository_max_commits)
         for _, commit in ipairs(view_state.parsed.commits) do
           for _, file in ipairs(commit.files) do
             file.path = relative_to(view_state.workspace.root_dir, file.absolute_path)

@@ -22,7 +22,7 @@ return function()
   local original_emit = events.emit
   local original_is_busy = queue.is_busy
   local original_enqueue = queue.enqueue
-  local original_run = runner.run
+  local original_stream = runner.stream
   local original_refresh = status_service.refresh
   local buffers = {}
 
@@ -75,8 +75,14 @@ return function()
     capabilities.detect = original_detect
     commit_buffer.open = original_open
 
-    local result = { code = 0, stdout = { "committed" }, stderr = {} }
+    local chunks = {
+      { "stdout", "Checking in pkg/one.lua;\nnew revision: 1.2; prev" },
+      { "stderr", "check: lint ok\r\n" },
+      { "stdout", "ious revision: 1.1\ndone" },
+    }
+    local result = { code = 0 }
     local command
+    local stream_opts
     local refreshed_bufnr
     local closed_bufnr
     local emitted
@@ -100,9 +106,17 @@ return function()
     queue.enqueue = function(_, work)
       work(function() end)
     end
-    runner.run = function(next_command, _, callback)
+    runner.stream = function(next_command, opts, handlers)
       command = next_command
-      callback(result)
+      stream_opts = opts
+      for _, chunk in ipairs(chunks) do
+        if chunk[1] == "stdout" then
+          handlers.on_stdout(chunk[2])
+        else
+          handlers.on_stderr(chunk[2])
+        end
+      end
+      handlers.on_complete(vim.tbl_extend("force", { duration_ms = 75000 }, result))
     end
     status_service.refresh = function(bufnr, _, callback)
       refreshed_bufnr = bufnr
@@ -123,12 +137,24 @@ return function()
       "cvs commit -m Commit subject pkg/one.lua pkg/two.lua",
       "commit uses only selected files"
     )
+    assert_eq(stream_opts.timeout, false, "commit is not bounded by the generic command timeout")
     assert_eq(refreshed_bufnr, source_bufnr, "successful commit refreshes source status")
-    assert_eq(closed_bufnr, commit_bufnr, "successful selected commit closes its editor")
+    assert_eq(closed_bufnr, nil, "successful commit keeps its output visible")
+    assert_eq(last_update.phase, "done", "successful commit renders its completed state")
+    assert_eq(last_update.result.code, 0, "successful commit records its result")
+    assert_eq(
+      table.concat(last_update.output, "|"),
+      "Checking in pkg/one.lua;|check: lint ok|new revision: 1.2; previous revision: 1.1|done",
+      "chunked stdout and stderr are reassembled into complete lines"
+    )
     assert_eq(emitted.name, "CvsChanged", "successful commit emits changed event")
     assert_eq(#emitted.data.files, 2, "commit event includes selected files")
 
-    result = { code = 1, stdout = {}, stderr = { "commit failed" } }
+    local _, resubmit_err = service.submit(commit_bufnr)
+    assert_eq(resubmit_err and resubmit_err.kind, "commit_completed", "a succeeded commit cannot be resubmitted")
+
+    chunks = { { "stderr", "commit failed\n" } }
+    result = { code = 1 }
     refreshed_bufnr = nil
     closed_bufnr = nil
     last_update = nil
@@ -151,7 +177,7 @@ return function()
     assert_eq(closed_bufnr, nil, "failed commit keeps its editor open")
     assert_eq(last_update.phase, "done", "failed commit renders its completed state")
     assert_eq(last_update.message_lines[1], "Commit subject", "failed commit preserves its message")
-    assert_eq(last_update.messages[1], "commit failed", "failed commit displays the CVS error")
+    assert_eq(last_update.output[1], "commit failed", "failed commit displays the CVS error")
   end)
 
   commit_buffer.get_message = original_get_message
@@ -162,7 +188,7 @@ return function()
   events.emit = original_emit
   queue.is_busy = original_is_busy
   queue.enqueue = original_enqueue
-  runner.run = original_run
+  runner.stream = original_stream
   status_service.refresh = original_refresh
   for _, bufnr in ipairs(buffers) do
     state.detach_buffer(bufnr)

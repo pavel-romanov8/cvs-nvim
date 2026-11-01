@@ -19,7 +19,10 @@ local function scope_lines(view_state)
   if (view_state.repository_days or 0) > 0 then
     limits[#limits + 1] = ("last %d days"):format(view_state.repository_days)
   end
-  if (view_state.repository_max_commits or 0) > 0 then
+  local commit_from = view_state.repository_commit_from or 1
+  if commit_from > 1 and (view_state.repository_max_commits or 0) > 0 then
+    limits[#limits + 1] = ("commits %d-%d"):format(commit_from, view_state.repository_max_commits)
+  elseif (view_state.repository_max_commits or 0) > 0 then
     local count = view_state.repository_max_commits
     limits[#limits + 1] = ("up to %d commit%s"):format(count, count == 1 and "" or "s")
   end
@@ -33,13 +36,28 @@ local function scope_lines(view_state)
   elseif view_state.error then
     lines[#lines + 1] = "CVS log failed: " .. view_state.error
   elseif #view_state.parsed.commits == 0 then
-    lines[#lines + 1] = "No commits found."
-  else
-    if view_state.parsed.truncated then
-      lines[#lines + 1] = ("Commits: %d shown of %d matching commits"):format(
-        #view_state.parsed.commits,
+    if (view_state.parsed.total_commits or 0) > 0 then
+      lines[#lines + 1] = ("No commits in the selected range (%d matching commits)."):format(
         view_state.parsed.total_commits
       )
+    else
+      lines[#lines + 1] = "No commits found."
+    end
+  else
+    if view_state.parsed.truncated then
+      if (view_state.parsed.visible_from or 1) > 1 then
+        lines[#lines + 1] = ("Commits: %d shown (%d-%d of %d matching commits)"):format(
+          #view_state.parsed.commits,
+          view_state.parsed.visible_from,
+          view_state.parsed.visible_to,
+          view_state.parsed.total_commits
+        )
+      else
+        lines[#lines + 1] = ("Commits: %d shown of %d matching commits"):format(
+          #view_state.parsed.commits,
+          view_state.parsed.total_commits
+        )
+      end
     else
       lines[#lines + 1] = ("Commits: %d"):format(#view_state.parsed.commits)
     end

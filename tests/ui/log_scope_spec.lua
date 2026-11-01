@@ -67,6 +67,30 @@ return function(root)
     local widened = require("cvs.core.state").get_buffer(bufnr).view_state
     assert(widened.repository_days == 60 and widened.repository_max_commits == 2 and #calls == 2,
       "load older doubles both repository bounds before querying again")
+    calls[2].callback({
+      code = 0,
+      signal = 0,
+      stdout = vim.fn.readfile(root .. "/tests/fixtures/cvs/log/sample-workspace.txt"),
+      stderr = {},
+    })
+
+    local ranged_bufnr = service.open({
+      path = tmp,
+      repository_days = 3,
+      repository_commit_from = 2,
+      repository_max_commits = 3,
+    })
+    calls[3].callback({
+      code = 0,
+      signal = 0,
+      stdout = vim.fn.readfile(root .. "/tests/fixtures/cvs/log/sample-workspace.txt"),
+      stderr = {},
+    })
+    assert(text(ranged_bufnr):find("Range: last 3 days, commits 2-3", 1, true)
+      and text(ranged_bufnr):find("Commits: 2 shown (2-3 of 3 matching commits)", 1, true),
+      "inline options select an inclusive newest-first commit range")
+    assert(not text(ranged_bufnr):find("commit ABC123", 1, true)
+      and text(ranged_bufnr):find("commit DEF456", 1, true), "commit ranges exclude newer entries")
   end)
 
   runner.run, capabilities.detect, util.notify = old_run, old_detect, old_notify

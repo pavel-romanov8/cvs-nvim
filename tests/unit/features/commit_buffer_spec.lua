@@ -50,4 +50,17 @@ return function()
     true,
     "rendered command escapes message newlines"
   )
+
+  rendered = buffer._render_lines({
+    message_lines = { "Subject" },
+    workspace = { root_dir = "/tmp/work" },
+    scope_label = "pkg/one.lua",
+    phase = "done",
+    output = { "Checking in pkg/one.lua;", "commitinfo: check failed" },
+    result = { code = 1, duration_ms = 95000 },
+  })
+  assert_eq(#buffer._extract_message_lines(rendered), 1, "rendered output never leaks into the commit message")
+  text = table.concat(rendered, "\n")
+  assert_eq(text:find("#   commitinfo: check failed", 1, true) ~= nil, true, "CVS output is rendered")
+  assert_eq(text:find("FAILED (exit code 1) after 1m 35s", 1, true) ~= nil, true, "failure outcome is explicit")
 end

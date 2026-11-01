@@ -96,4 +96,13 @@ function M.resolve_path(path)
   return cwd and M.normalize(cwd) or nil
 end
 
+function M.format_duration(ms)
+  local seconds = math.floor((ms or 0) / 1000)
+  if seconds < 60 then
+    return ("%ds"):format(seconds)
+  end
+
+  return ("%dm %02ds"):format(math.floor(seconds / 60), seconds % 60)
+end
+
 return M

@@ -18,6 +18,7 @@ return function()
   vim.cmd("CvsDiff!")
   vim.cmd("vertical CvsLog")
   vim.cmd("CvsLog!")
+  vim.cmd("CvsLog -d 3 -c 10-20 .")
   vim.cmd("CvsRevert ABC123")
   package.loaded.cvs = original
 
@@ -25,6 +26,9 @@ return function()
   assert(calls[2].method == "diff" and calls[2].opts.stream, ":CvsDiff! selects streamed hunks")
   assert(calls[3].method == "log" and calls[3].opts.kind == "vsplit", "Ex modifiers reach :CvsLog")
   assert(calls[4].method == "log" and calls[4].opts.force, ":CvsLog! selects the workspace root")
-  assert(calls[5].method == "revert" and calls[5].opts.commit_id == "ABC123",
+  assert(calls[5].method == "log" and calls[5].opts.repository_days == 3
+    and calls[5].opts.repository_commit_from == 10 and calls[5].opts.repository_max_commits == 20
+    and calls[5].opts.path == ".", ":CvsLog parses inline day and commit ranges")
+  assert(calls[6].method == "revert" and calls[6].opts.commit_id == "ABC123",
     ":CvsRevert forwards its commit ID")
 end
